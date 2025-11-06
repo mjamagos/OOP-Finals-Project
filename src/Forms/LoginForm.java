@@ -24,14 +24,12 @@ import javax.swing.JOptionPane;
  * and redirects to their respective main pages upon successful login.
  */
 public class LoginForm extends javax.swing.JFrame {
-
+    
     public LoginForm() {
         initComponents();
         setCenter(); // Centers the window on screen
         useCustomBackground(); // Sets custom background
-        //setMaximize();
     }
-
     @SuppressWarnings("unchecked")
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
@@ -226,88 +224,66 @@ public class LoginForm extends javax.swing.JFrame {
      * (student or instructor) if login is successful.
      */
     private void BLoginActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_BLoginActionPerformed
-        try {
-            //Loads the MYSQL JDBC Driver for Java-SQL communication
-            Class.forName("com.mysql.cj.jdbc.Driver");
-            
-            // Establishes a connection to the database "url, username, password"
-            Connection conn = DriverManager.getConnection(
-                "jdbc:mysql://localhost:3306/classattendance", "root", ""
-            );
+        try (Connection conn = DBConfig.getConnection()) {
 
-            // Prepares SQL login query (secure against injection)
             String sql = "SELECT * FROM tblaccount WHERE Username = ? AND Password = ?";
-            PreparedStatement pstatement = conn.prepareStatement(sql);
-            pstatement.setString(1, UserIDField.getText());
-            pstatement.setString(2, PasswordField.getText());
+            try (PreparedStatement pstatement = conn.prepareStatement(sql)) {
+                pstatement.setString(1, UserIDField.getText());
+                pstatement.setString(2, PasswordField.getText());
 
-            ResultSet rs = pstatement.executeQuery();
+                try (ResultSet rs = pstatement.executeQuery()) {
+                    int i = 0;
+                    String Role = "";
+                    String StudID = "";
+                    String InstID = "";
+                    String Username = "";
 
-            // Stores account info if match is found
-            int i = 0;
-            int AccountID = 0;
-            String Role = "";
-            String StudID = "";
-            String InstID = "";
-            String AdminID = "";
-            String Username = "";
-
-
-            //Loops through the result set "rs"
-            while (rs.next()) {
-                i++;
-                AccountID= rs.getInt("AccountID");
-                Role = rs.getString("Role"); //student or instructor
-                StudID = rs.getString("StudID");
-                InstID = rs.getString("InstID");
-                AdminID = rs.getString("AdminID");
-                Username = rs.getString("Username");
-            }
-            
-            // Initializes variables to display info after login
-            String FName = "";
-            String MName = "";
-            String LName = "";
-            
-            // Retrieves user details based on their role
-            if(i > 0){ // valid account
-                if (Role.equalsIgnoreCase("Instructor")) {
-                    Statement stmt = conn.createStatement();
-                    ResultSet rs2 = stmt.executeQuery(
-                        "SELECT * FROM tblinstructor WHERE InstID = '" + InstID + "'"
-                    );
-                    if (rs2.next()) {
-                        FName = rs2.getString("FName");
-                        MName = rs2.getString("MName");
-                        LName = rs2.getString("LName");
+                    while (rs.next()) {
+                        i++;
+                        Role = rs.getString("Role"); //student or instructor
+                        StudID = rs.getString("StudID");
+                        InstID = rs.getString("InstID");
+                        Username = rs.getString("Username");
                     }
-                    rs2.close();
-                    stmt.close();
 
-                    MainPageInst f1 = new MainPageInst();
-                    f1.setVisible(true);
-                    f1.setLoggedInUser(InstID, Role, FName, MName, LName);
+                    String FName = "";
+                    String MName = "";
+                    String LName = "";
+
+                    if (i > 0) { // valid account
+                        if ("Instructor".equalsIgnoreCase(Role)) {
+                            // Use PreparedStatement to fetch instructor details
+                            try (PreparedStatement pst = conn.prepareStatement("SELECT FName, MName, LName FROM tblinstructor WHERE InstID = ?")) {
+                                pst.setString(1, InstID);
+                                try (ResultSet rs2 = pst.executeQuery()) {
+                                    if (rs2.next()) {
+                                        FName = rs2.getString("FName");
+                                        MName = rs2.getString("MName");
+                                        LName = rs2.getString("LName");
+                                    }
+                                }
+                            }
+
+                            MainPageInst f1 = new MainPageInst();
+                            f1.setVisible(true);
+                            f1.setLoggedInUser(InstID, Role, FName, MName, LName);
+                        }
+
+                        this.dispose();
+                    } else { // invalid account
+                        JOptionPane.showMessageDialog(null, "Account does not exist. Please enter valid credentials.");
+                        UserIDField.setText("");
+                        PasswordField.setText("");
+                        UserIDField.requestFocus();
+                    }
                 }
-            // Close login form after successful login
-            this.dispose();
-
-        } else { // invalid account
-            JOptionPane.showMessageDialog(null, "Account does not exist. Please enter valid credentials.");
-            UserIDField.setText("");
-            PasswordField.setText("");
-            UserIDField.requestFocus();
-        }
-            // Clean up resources
-            rs.close();   
-            pstatement.close();  
-            conn.close(); 
+            }
 
         } catch (ClassNotFoundException e) {
             System.out.println("Can't load driver " + e);
         } catch (SQLException e) {
             System.out.println("Database access failed " + e);
         }
-        
     }//GEN-LAST:event_BLoginActionPerformed
 
     private void CBShowPassActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_CBShowPassActionPerformed
@@ -359,10 +335,6 @@ public class LoginForm extends javax.swing.JFrame {
         int top = (d.height - this.getHeight()) / 2;
         this.setLocation(left, top);
     }
-    
-    /*private void setMaximize(){
-        this.setExtendedState(BaseFrame.MAXIMIZED_BOTH);
-    }*/
     
     private void useCustomBackground() {
     try {

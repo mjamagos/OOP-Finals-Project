@@ -4,11 +4,22 @@
  */
 package Forms;
 
+import java.sql.PreparedStatement;
 import java.awt.Dimension;
+import java.awt.FileDialog;
 import java.awt.Toolkit;
+import java.awt.Frame;
+import javax.swing.SwingUtilities;
+import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
+import javax.swing.JPopupMenu;
+import javax.swing.JTable;
+import javax.swing.table.DefaultTableModel;
+
 
 /**
  *
@@ -18,22 +29,25 @@ public class AttendanceLogInst extends BaseFrame {
 
     private MainPageInst mainPage;
     private Connection conn;
+    private StudentRepo dao;                // <- changed to StudentRepo
     private String loggedInInstID;
     private boolean integrationInitialized = false;
-    
+
     // user info
     private String InstID;
     private String Role;
     private String FName;
     private String MName;
     private String LName;
-    
+
     public AttendanceLogInst(MainPageInst mainPage) {
         super(mainPage);
         this.mainPage = mainPage;
         initComponents();
         setCenter();
         initConnection();
+        if (dao == null && conn != null) dao = new StudentRepo(conn); // <- changed
+        addTableRowPopup(tableAttendance, dao);
     }
     
     
@@ -95,6 +109,11 @@ public class AttendanceLogInst extends BaseFrame {
         });
 
         BViewProfile.setText("View Profile");
+        BViewProfile.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                BViewProfileActionPerformed(evt);
+            }
+        });
 
         BLogout.setText("Logout");
         BLogout.addActionListener(new java.awt.event.ActionListener() {
@@ -142,7 +161,7 @@ public class AttendanceLogInst extends BaseFrame {
         );
 
         comboCourse.setBackground(new java.awt.Color(228, 226, 226));
-        comboCourse.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Course", "BS Computer Science", "BS Information Technology", "Bachelor in Library and Information Science", "Diploma in Computer Technology", " " }));
+        comboCourse.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Course", "Computer Science", "Information Technology", "Bachelor in Library and Information Science", "Diploma in Computer Technology", " " }));
         comboCourse.setFont(new java.awt.Font("Poppins", 0, 12)); // NOI18N
 
         comboSubject.setBackground(new java.awt.Color(228, 226, 226));
@@ -158,6 +177,11 @@ public class AttendanceLogInst extends BaseFrame {
         comboSection.setFont(new java.awt.Font("Poppins", 0, 12)); // NOI18N
 
         savePDF.setText("Save as PDF");
+        savePDF.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                savePDFActionPerformed(evt);
+            }
+        });
 
         jScrollPane2.setViewportView(tableAttendance);
 
@@ -213,7 +237,9 @@ public class AttendanceLogInst extends BaseFrame {
     }// </editor-fold>//GEN-END:initComponents
 
     private void BViewClassActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_BViewClassActionPerformed
-
+        ViewClasses VC = mainPage.getViewClasses(); // reuse existing instance
+        VC.setVisible(true);
+        this.setVisible(false);
     }//GEN-LAST:event_BViewClassActionPerformed
 
     private void IDScannerActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_IDScannerActionPerformed
@@ -236,6 +262,16 @@ public class AttendanceLogInst extends BaseFrame {
             this.setVisible(false);
             mainPage.setVisible(true);
     }//GEN-LAST:event_BackHomeMouseClicked
+
+    private void BViewProfileActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_BViewProfileActionPerformed
+        ViewProfile VP = new ViewProfile (mainPage);
+        VP.setVisible(true);
+        this.setVisible(false);
+    }//GEN-LAST:event_BViewProfileActionPerformed
+
+    private void savePDFActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_savePDFActionPerformed
+        PDFExportUtil.exportTable(this, tableAttendance);
+    }//GEN-LAST:event_savePDFActionPerformed
 
     /**
      * @param args the command line arguments
@@ -299,14 +335,10 @@ public class AttendanceLogInst extends BaseFrame {
     /** Initialize database connection */
     private void initConnection() {
         try {
-            conn = DriverManager.getConnection(
-                    "jdbc:mysql://localhost:3306/classattendance", 
-                    "root",                            
-                    ""                            
-            );
-        } catch (SQLException ex) {
+            conn = DBConfig.getConnection();
+            dao = new StudentRepo(conn);
+        } catch (Exception ex) {
             ex.printStackTrace();
-            // Optional: show an error dialog
             javax.swing.JOptionPane.showMessageDialog(this,
                     "Database connection failed!",
                     "Error",
@@ -314,17 +346,22 @@ public class AttendanceLogInst extends BaseFrame {
         }
     }
     
-    
     public Connection getConnection() {
         return conn;
     }
     
-    
-    /** Initialize attendance table integration */
+    public void setConnection(Connection conn) {
+        this.conn = conn;
+    }
+
+    public void setInstructorID(String instID) {
+        this.InstID = instID;
+    }
+
     private void initIntegration() {
-        if (integrationInitialized) return; // avoid double initialization
+        if (integrationInitialized) return;
         integrationInitialized = true;
-        
+
         if (conn == null) return; // avoid null pointer
 
         InstructorAttendanceTable attTable = new InstructorAttendanceTable(conn, tableAttendance);
@@ -332,7 +369,14 @@ public class AttendanceLogInst extends BaseFrame {
         Runnable reloadTable = () -> {
             Integer selectedCourseID = comboCourse.getSelectedIndex() <= 0 ? null : comboCourse.getSelectedIndex();
             Integer selectedSubID = comboSubject.getSelectedIndex() <= 0 ? null : comboSubject.getSelectedIndex();
-            Integer selectedYear = comboYear.getSelectedIndex() <= 0 ? null : (Integer) comboYear.getSelectedItem();
+            Integer selectedYear = null;
+            if (comboYear.getSelectedIndex() > 0) {
+                try {
+                    selectedYear = Integer.valueOf(comboYear.getSelectedItem().toString());
+                } catch (NumberFormatException ex) {
+                    selectedYear = null;
+                }
+            }
             String selectedSection = comboSection.getSelectedIndex() <= 0 ? null : (String) comboSection.getSelectedItem();
 
             attTable.loadData(loggedInInstID, selectedCourseID, selectedSubID, selectedYear, selectedSection);
@@ -346,10 +390,95 @@ public class AttendanceLogInst extends BaseFrame {
         reloadTable.run();
     }
 
-    
+    // ------------------- RIGHT-CLICK EDIT/DELETE -------------------
+    private void addTableRowPopup(JTable tableAttendance, StudentRepo dao) { // <- param type changed
+        JPopupMenu popup = new JPopupMenu();
+        JMenuItem editItem = new JMenuItem("Edit");
+        JMenuItem deleteItem = new JMenuItem("Delete");
+        popup.add(editItem);
+        popup.add(deleteItem);
 
+        tableAttendance.setComponentPopupMenu(popup);
 
+        tableAttendance.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mousePressed(java.awt.event.MouseEvent e) {
+                int row = tableAttendance.rowAtPoint(e.getPoint());
+                if (row != -1) {
+                    tableAttendance.setRowSelectionInterval(row, row);
+                }
+            }
+        });
 
+        // EDIT handler unchanged (uses mapper and StudentEditLauncher)
+        editItem.addActionListener(e -> {
+            RowToStudentMapper attMapper = (model, modelRow) -> {
+                String course  = UiUtils.safeToString(model.getValueAt(modelRow, 0));
+                String subject = UiUtils.safeToString(model.getValueAt(modelRow, 1));
+                String lname   = UiUtils.safeToString(model.getValueAt(modelRow, 2));
+                String fname   = UiUtils.safeToString(model.getValueAt(modelRow, 3));
+                String mname   = UiUtils.safeToString(model.getValueAt(modelRow, 4));
+                String year    = UiUtils.safeToString(model.getValueAt(modelRow, 5));
+                String section = UiUtils.safeToString(model.getValueAt(modelRow, 6));
+                String studID  = ""; // if model contains StudID, populate here
+                return new StudentRow(studID, fname, mname, lname, subject, course, year, section);
+            };
+
+            Frame owner = (Frame) SwingUtilities.getWindowAncestor(tableAttendance);
+
+            StudentEditLauncher.openEditDialogFromTable(owner, tableAttendance, dao, attMapper, () -> {
+                comboCourse.dispatchEvent(new java.awt.event.ActionEvent(comboCourse, java.awt.event.ActionEvent.ACTION_PERFORMED, ""));
+            });
+        });
+
+        // deleteItem ActionListener body (inside addTableRowPopup)
+        deleteItem.addActionListener(e -> {
+            int viewRow = tableAttendance.getSelectedRow();
+            if (viewRow == -1) return;
+            int modelRow = tableAttendance.convertRowIndexToModel(viewRow);
+            DefaultTableModel model = (DefaultTableModel) tableAttendance.getModel();
+
+            int colCount = model.getColumnCount();
+            int attendIdCol = Math.max(0, colCount - 2);
+            int studIdCol = Math.max(0, colCount - 1);
+
+            String attendId = UiUtils.safeToString(model.getValueAt(modelRow, attendIdCol));
+            String studID = UiUtils.safeToString(model.getValueAt(modelRow, studIdCol));
+
+            if (attendId != null && !attendId.isEmpty()) {
+                int confirm = JOptionPane.showConfirmDialog(null,
+                        "Are you sure you want to delete this attendance record?", "Confirm Delete", JOptionPane.YES_NO_OPTION);
+                if (confirm != JOptionPane.YES_OPTION) return;
+
+                boolean ok = dao == null ? false : dao.deleteAttendanceById(attendId);
+                if (!ok) {
+                    JOptionPane.showMessageDialog(null, "Error deleting attendance from database!");
+                    return;
+                }
+                model.removeRow(modelRow);
+                return;
+            }
+
+            if (studID != null && !studID.isEmpty()) {
+                int confirm = JOptionPane.showConfirmDialog(null,
+                        "Attendance record does not include its internal ID. Do you want to delete all matching attendance records for student " + studID + " (may delete multiple rows)?",
+                        "Confirm Delete", JOptionPane.YES_NO_OPTION);
+                if (confirm != JOptionPane.YES_OPTION) return;
+
+                boolean ok = dao == null ? false : dao.deleteAttendanceForStudOnDate(studID, null);
+                if (!ok) {
+                    JOptionPane.showMessageDialog(null, "Error deleting attendance from database!");
+                    return;
+                }
+                model.removeRow(modelRow);
+                return;
+            }
+
+            JOptionPane.showMessageDialog(null,
+                    "Couldn't determine a unique attendance record to delete. Please include AttendID/StudID in the table model (hidden columns are fine).",
+                    "Delete failed", JOptionPane.ERROR_MESSAGE);
+        });
+    }
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private customElements.NewButton BLogout;
     private customElements.NewButton BViewClass;

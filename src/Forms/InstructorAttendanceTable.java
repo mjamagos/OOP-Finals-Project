@@ -1,81 +1,129 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package Forms;
 
-/**
- *
- * @author Jobelle
- */
-/*
-import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
-import java.sql.*;
-*/
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import javax.swing.BorderFactory;
 import javax.swing.JOptionPane;
+import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.ScrollPaneConstants;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.JTableHeader;
 
+/**
+ * InstructorAttendanceTable — builds the table model that AttendanceLogInst uses.
+ *
+ * NOTE: uses AttendID as the attendance PK column name.
+ */
 public class InstructorAttendanceTable {
 
     private JTable table;
     private DefaultTableModel tableModel;
     private Connection conn;
 
-    /**
-     * Constructor
-     * @param conn Database connection
-     * @param existingTable JTable from your GUI builder
-     */
+    // Constructor
     public InstructorAttendanceTable(Connection conn, JTable existingTable) {
         this.conn = conn;
         this.table = existingTable;
 
-        // Column names match your attendance table example
-        String[] columns = {"CourseName", "Subject", "Last Name", "First Name", "Middle Name",
-                            "Schedule", "Day", "Time in", "Status"};
+        // columns: last two are hidden internal IDs
+        String[] columns = {
+            "Course Name", "Subject",
+            "Last Name", "First Name", "Middle Name",
+            "Year", "Section",
+            "Schedule", "Day", "Time In", "Status",
+            "AttendID", "StudID"
+        };
 
         tableModel = new DefaultTableModel(columns, 0) {
-            // Make table cells non-editable
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };
-
         table.setModel(tableModel);
+
+        // styling (unchanged)
+        table.setFont(new java.awt.Font("Poppins", java.awt.Font.PLAIN, 12));
+        table.setBackground(java.awt.Color.WHITE);
+        table.setForeground(java.awt.Color.BLACK);
+        table.setGridColor(new java.awt.Color(230, 230, 230));
+        table.setRowHeight(28);
+        table.setShowGrid(true);
+        table.setIntercellSpacing(new java.awt.Dimension(0, 1));
+        table.setSelectionBackground(new java.awt.Color(240, 240, 240));
+        table.setSelectionForeground(java.awt.Color.BLACK);
+        table.setBorder(BorderFactory.createEmptyBorder());
+        table.setShowHorizontalLines(true);
+        table.setShowVerticalLines(true);
+        table.setFocusable(false);
+
+        JTableHeader header = table.getTableHeader();
+        header.setFont(new java.awt.Font("Poppins", java.awt.Font.PLAIN, 12));
+        header.setBackground(java.awt.Color.WHITE);
+        header.setForeground(java.awt.Color.BLACK);
+        header.setOpaque(true);
+        header.setReorderingAllowed(false);
+        header.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new java.awt.Color(220, 220, 220)));
+
+        if (table.getParent() instanceof JScrollPane scroll) {
+            scroll.setBorder(BorderFactory.createEmptyBorder());
+            scroll.getViewport().setBackground(java.awt.Color.WHITE);
+            scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+            scroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+
+            scroll.getVerticalScrollBar().setUI(new javax.swing.plaf.basic.BasicScrollBarUI() {
+                @Override
+                protected void configureScrollBarColors() {
+                    this.thumbColor = new java.awt.Color(200, 200, 200);
+                    this.trackColor = java.awt.Color.WHITE;
+                }
+            });
+        }
+
+        hideInternalColumnsIfPresent();
     }
 
-    /**
-     * Load attendance data into the table based on instructor ID and filters
-     * @param instID Logged-in instructor ID
-     * @param courseID Selected course filter (null = all)
-     * @param subID Selected subject filter (null = all)
-     * @param year Selected student year filter (null = all)
-     * @param section Selected student section filter (null = all)
-     */
-    public void loadData(String instID, Integer courseID, Integer subID, Integer year, String section) {
+    // hideInternalColumnsIfPresent()
+    private void hideInternalColumnsIfPresent() {
         try {
-            String sql = "SELECT c.CourseName, s.SubName, st.Lname, st.Fname, st.Mname, " +
-                         "sch.SchedID, a.DayOfWeek, a.TimeStamp, a.Status " +
-                         "FROM tblattendance a " +
-                         "JOIN tblstudent st ON a.StudID = st.StudID " +
-                         "JOIN tblschedule sch ON a.SchedID = sch.SchedID " +
-                         "JOIN tblsubject s ON s.SubID = sch.SubID " +
-                         "JOIN tblcourse c ON s.CourseID = c.CourseID " +
-                         "WHERE s.InstID = ? " +
-                         "AND (? IS NULL OR c.CourseID = ?) " +
-                         "AND (? IS NULL OR s.SubID = ?) " +
-                         "AND (? IS NULL OR st.Year = ?) " +
-                         "AND (? IS NULL OR st.Section = ?) " +
-                         "ORDER BY c.CourseName, s.SubName, st.Lname, st.Fname";
+            int colCount = table.getColumnModel().getColumnCount();
+            int attendColIndex = colCount - 2;
+            int studColIndex = colCount - 1;
 
-            PreparedStatement pst = conn.prepareStatement(sql);
+            if (attendColIndex >= 0) {
+                var col = table.getColumnModel().getColumn(attendColIndex);
+                col.setMinWidth(0); col.setMaxWidth(0); col.setPreferredWidth(0); col.setResizable(false);
+            }
+            if (studColIndex >= 0) {
+                var col = table.getColumnModel().getColumn(studColIndex);
+                col.setMinWidth(0); col.setMaxWidth(0); col.setPreferredWidth(0); col.setResizable(false);
+            }
+        } catch (Exception ex) {
+            // ignore if column model not ready
+        }
+    }
+
+    // loadData(...)
+    public void loadData(String instID, Integer courseID, Integer subID, Integer year, String section) {
+        String sql =
+            "SELECT a.AttendID, a.StudID, c.CourseName, sub.SubName, st.Lname, st.Fname, st.Mname, " +
+            "       st.Year, st.Section, sch.SchedID, a.DayOfWeek, a.TimeStamp, a.Status " +
+            "FROM tblattendance a " +
+            "JOIN tblstudent st ON a.StudID = st.StudID " +
+            "JOIN tblschedule sch ON a.SchedID = sch.SchedID " +
+            "JOIN tblsubject sub ON sch.SubID = sub.SubID " +
+            "JOIN tblcourse c ON sub.CourseID = c.CourseID " +
+            "WHERE sch.InstID = ? " +
+            "AND (? IS NULL OR c.CourseID = ?) " +
+            "AND (? IS NULL OR sub.SubID = ?) " +
+            "AND (? IS NULL OR st.Year = ?) " +
+            "AND (? IS NULL OR st.Section = ?) " +
+            "ORDER BY c.CourseName, sub.SubName, st.Lname, st.Fname";
+
+        try (PreparedStatement pst = conn.prepareStatement(sql)) {
 
             pst.setObject(1, instID);
             pst.setObject(2, courseID); pst.setObject(3, courseID);
@@ -83,23 +131,30 @@ public class InstructorAttendanceTable {
             pst.setObject(6, year); pst.setObject(7, year);
             pst.setObject(8, section); pst.setObject(9, section);
 
-            ResultSet rs = pst.executeQuery();
-            tableModel.setRowCount(0); // Clear existing rows
+            try (ResultSet rs = pst.executeQuery()) {
+                tableModel.setRowCount(0);
 
-            while (rs.next()) {
-                Object[] row = {
+                while (rs.next()) {
+                    Object[] row = {
                         rs.getString("CourseName"),
                         rs.getString("SubName"),
                         rs.getString("Lname"),
                         rs.getString("Fname"),
                         rs.getString("Mname"),
+                        rs.getString("Year"),
+                        rs.getString("Section"),
                         rs.getString("SchedID"),
                         rs.getString("DayOfWeek"),
                         rs.getTime("TimeStamp"),
-                        rs.getString("Status")
-                };
-                tableModel.addRow(row);
+                        rs.getString("Status"),
+                        rs.getString("AttendID"), // hidden PK
+                        rs.getString("StudID")    // hidden StudID
+                    };
+                    tableModel.addRow(row);
+                }
             }
+
+            hideInternalColumnsIfPresent();
 
         } catch (SQLException e) {
             e.printStackTrace();

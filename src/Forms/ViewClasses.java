@@ -4,35 +4,50 @@
  */
 package Forms;
 
+import customElements.Classes;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 
-import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.Font;
+import java.awt.FileDialog;
+import java.awt.Frame;
 import java.awt.Toolkit;
-import javax.swing.JOptionPane;
+import java.io.File;
 
-import javax.swing.JButton;
+import javax.swing.JPopupMenu;
+import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
+import javax.swing.JTable;
+import javax.swing.SwingUtilities;
 
 /**
  *
  * @author Jobelle
  */
 public class ViewClasses extends BaseFrame {
+    
     private MainPageInst mainPage;
-    private String instructorID;
-    /**
-     * Creates new form ViewClasses
-     */
+    private Connection conn;
+    private StudentRepo dao; // <- changed type
+    private String loggedInInstID;
+    private boolean integrationInitialized = false;
+    
+    // user info (needed by setLoggedInUser and other methods)
+    private String InstID;
+    private String Role;
+    private String FName;
+    private String MName;
+    private String LName;
+
     public ViewClasses(MainPageInst mainPage) {
         super(mainPage);
         this.mainPage = mainPage;
-        this.instructorID = mainPage.getInstructorID();
+        this.loggedInInstID = mainPage.getInstructorID();
+        initConnection();
         initComponents();
+        initIntegration();
         setCenter();
         useCustomBackground();
     }
@@ -51,7 +66,7 @@ public class ViewClasses extends BaseFrame {
         BackHome = new javax.swing.JLabel();
         jLabel1 = new javax.swing.JLabel();
         IDScanner = new customElements.NewButton();
-        BViewClass = new customElements.NewButton();
+        AttendanceLog = new customElements.NewButton();
         BViewProfile = new customElements.NewButton();
         BLogout = new customElements.NewButton();
         comboYear = new customElements.RoundedComboBox();
@@ -59,6 +74,7 @@ public class ViewClasses extends BaseFrame {
         savePDF = new customElements.NewButton();
         comboCourse = new customElements.RoundedComboBox();
         comboSubject = new customElements.RoundedComboBox();
+        classTable = new customElements.Classes();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
@@ -87,10 +103,10 @@ public class ViewClasses extends BaseFrame {
             }
         });
 
-        BViewClass.setText("Attendance Log");
-        BViewClass.addActionListener(new java.awt.event.ActionListener() {
+        AttendanceLog.setText("Attendance Log");
+        AttendanceLog.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
-                BViewClassActionPerformed(evt);
+                AttendanceLogActionPerformed(evt);
             }
         });
 
@@ -115,7 +131,7 @@ public class ViewClasses extends BaseFrame {
                 .addGap(18, 18, 18)
                 .addComponent(IDScanner, javax.swing.GroupLayout.PREFERRED_SIZE, 114, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(18, 18, 18)
-                .addComponent(BViewClass, javax.swing.GroupLayout.PREFERRED_SIZE, 119, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addComponent(AttendanceLog, javax.swing.GroupLayout.PREFERRED_SIZE, 119, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(18, 18, 18)
                 .addComponent(BViewProfile, javax.swing.GroupLayout.PREFERRED_SIZE, 93, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(18, 18, 18)
@@ -125,16 +141,15 @@ public class ViewClasses extends BaseFrame {
         panelNavigationLayout.setVerticalGroup(
             panelNavigationLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(panelNavigationLayout.createSequentialGroup()
-                .addGap(11, 11, 11)
+                .addGap(17, 17, 17)
                 .addGroup(panelNavigationLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(BackHome)
                     .addGroup(panelNavigationLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                        .addComponent(jLabel1)
-                        .addGroup(panelNavigationLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                            .addComponent(IDScanner, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(BViewClass, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(BViewProfile, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(BLogout, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))))
+                        .addComponent(IDScanner, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(AttendanceLog, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(BViewProfile, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(BLogout, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(jLabel1)))
                 .addContainerGap(20, Short.MAX_VALUE))
         );
 
@@ -147,13 +162,18 @@ public class ViewClasses extends BaseFrame {
         comboSection.setFont(new java.awt.Font("Poppins", 0, 12)); // NOI18N
 
         savePDF.setText("Save as PDF");
+        savePDF.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                savePDFActionPerformed(evt);
+            }
+        });
 
         comboCourse.setBackground(new java.awt.Color(228, 226, 226));
-        comboCourse.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Course", "BS Computer Science", "BS Information Technology", "Bachelor in Library and Information Science", "Diploma in Computer Technology", " " }));
+        comboCourse.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Course", "BS Computer Science", "BS Information Technology", "Bachelor in Library and Information Science", "Diploma in Computer Technology", "" }));
         comboCourse.setFont(new java.awt.Font("Poppins", 0, 12)); // NOI18N
 
         comboSubject.setBackground(new java.awt.Color(228, 226, 226));
-        comboSubject.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Subject", " " }));
+        comboSubject.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Subject", "Object-Oriented Programming", " ", " " }));
         comboSubject.setFont(new java.awt.Font("Poppins", 0, 12)); // NOI18N
 
         javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
@@ -163,15 +183,18 @@ public class ViewClasses extends BaseFrame {
             .addComponent(panelNavigation, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
             .addGroup(jPanel1Layout.createSequentialGroup()
                 .addGap(30, 30, 30)
-                .addComponent(savePDF, javax.swing.GroupLayout.PREFERRED_SIZE, 124, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(325, 325, 325)
-                .addComponent(comboCourse, javax.swing.GroupLayout.PREFERRED_SIZE, 114, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(comboSubject, javax.swing.GroupLayout.PREFERRED_SIZE, 114, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(comboYear, javax.swing.GroupLayout.PREFERRED_SIZE, 100, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(comboSection, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                    .addComponent(classTable, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addGroup(jPanel1Layout.createSequentialGroup()
+                        .addComponent(savePDF, javax.swing.GroupLayout.PREFERRED_SIZE, 124, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(325, 325, 325)
+                        .addComponent(comboCourse, javax.swing.GroupLayout.PREFERRED_SIZE, 114, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(18, 18, 18)
+                        .addComponent(comboSubject, javax.swing.GroupLayout.PREFERRED_SIZE, 114, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(18, 18, 18)
+                        .addComponent(comboYear, javax.swing.GroupLayout.PREFERRED_SIZE, 100, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(18, 18, 18)
+                        .addComponent(comboSection, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
                 .addContainerGap(29, Short.MAX_VALUE))
         );
         jPanel1Layout.setVerticalGroup(
@@ -185,7 +208,9 @@ public class ViewClasses extends BaseFrame {
                     .addComponent(comboSection, javax.swing.GroupLayout.PREFERRED_SIZE, 31, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(comboSubject, javax.swing.GroupLayout.PREFERRED_SIZE, 31, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(savePDF, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addContainerGap(564, Short.MAX_VALUE))
+                .addGap(18, 18, 18)
+                .addComponent(classTable, javax.swing.GroupLayout.PREFERRED_SIZE, 520, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(20, Short.MAX_VALUE))
         );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
@@ -223,9 +248,16 @@ public class ViewClasses extends BaseFrame {
         }
     }//GEN-LAST:event_BLogoutActionPerformed
 
-    private void BViewClassActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_BViewClassActionPerformed
+    private void AttendanceLogActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_AttendanceLogActionPerformed
+        AttendanceLogInst AL = mainPage.getAttendanceLogInst(); // reuse existing instance
+        AL.setVisible(true);
+        this.setVisible(false);
+    }//GEN-LAST:event_AttendanceLogActionPerformed
 
-    }//GEN-LAST:event_BViewClassActionPerformed
+    private void savePDFActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_savePDFActionPerformed
+        JTable table = classTable.getTable();
+        PDFExportUtil.exportTable(this, table);
+    }//GEN-LAST:event_savePDFActionPerformed
 
     /**
      * @param args the command line arguments
@@ -296,17 +328,97 @@ public class ViewClasses extends BaseFrame {
         }
     }
     
+    public void setLoggedInUser(String InstID, String Role, String FName, String MName, String LName) {
+        // Save to fields for later use
+        this.InstID = InstID;
+        this.Role = Role;
+        this.FName = FName;
+        this.MName = MName;
+        this.LName = LName;
+        
+        this.loggedInInstID = InstID;
+    }
+
+    private void initConnection() {
+        try {
+            conn = DBConfig.getConnection();
+            dao = new StudentRepo(conn);
+        } catch (SQLException | ClassNotFoundException ex) {
+            ex.printStackTrace();
+            javax.swing.JOptionPane.showMessageDialog(this,
+                    "Database connection failed!",
+                    "Error",
+                    javax.swing.JOptionPane.ERROR_MESSAGE);
+        }
+    }
     
+    public Connection getConnection() {
+        return conn;
+    }
     
+    // EDIT: Added setters so we can pass connection and instructor ID when re-opening the frame
+    public void setConnection(Connection conn) {
+        this.conn = conn;
+    }
 
+    public void setInstructorID(String instID) {
+        this.InstID = instID;
+    }
+    
+    private void initIntegration() {
+        if (conn == null || loggedInInstID == null) return;
+        classTable.loadData(loggedInInstID, null, null, null, null, conn);
+        classTable.attachFilters(comboCourse, comboSubject, comboYear, comboSection, loggedInInstID, conn);
+        attachClassTableEditPopup();
+    }
 
+    private void attachClassTableEditPopup() {
+        JPopupMenu popup = new JPopupMenu();
+        JMenuItem editItem = new JMenuItem("Edit");
+        popup.add(editItem);
 
+        JTable table = classTable.getTable(); // ensure customElements.Classes exposes getTable()
+        table.setComponentPopupMenu(popup);
+
+        table.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mousePressed(java.awt.event.MouseEvent e) {
+                int row = table.rowAtPoint(e.getPoint());
+                if (row != -1) table.setRowSelectionInterval(row, row);
+            }
+        });
+
+        editItem.addActionListener(e -> {
+            RowToStudentMapper classesMapper = (model, modelRow) -> {
+                String studID  = UiUtils.safeToString(model.getValueAt(modelRow, 0)); // if present
+                String lname   = UiUtils.safeToString(model.getValueAt(modelRow, 1));
+                String fname   = UiUtils.safeToString(model.getValueAt(modelRow, 2));
+                String mname   = UiUtils.safeToString(model.getValueAt(modelRow, 3));
+                String course  = UiUtils.safeToString(model.getValueAt(modelRow, 4));
+                String subject = UiUtils.safeToString(model.getValueAt(modelRow, 5));
+                String year    = UiUtils.safeToString(model.getValueAt(modelRow, 6));
+                String section = UiUtils.safeToString(model.getValueAt(modelRow, 7));
+                return new StudentRow(studID, fname, mname, lname, subject, course, year, section);
+            };
+
+            StudentEditLauncher.openEditDialogFromTable(
+                (Frame) SwingUtilities.getWindowAncestor(table),
+                table,
+                dao, // now StudentRepo
+                classesMapper,
+                () -> {
+                    initIntegration(); // refresh after save
+                }
+            );
+        });
+    }
     // Variables declaration - do not modify//GEN-BEGIN:variables
+    private customElements.NewButton AttendanceLog;
     private customElements.NewButton BLogout;
-    private customElements.NewButton BViewClass;
     private customElements.NewButton BViewProfile;
     private javax.swing.JLabel BackHome;
     private customElements.NewButton IDScanner;
+    private customElements.Classes classTable;
     private customElements.RoundedComboBox comboCourse;
     private customElements.RoundedComboBox comboSection;
     private customElements.RoundedComboBox comboSubject;

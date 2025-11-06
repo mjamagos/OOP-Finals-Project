@@ -6,18 +6,15 @@ package Forms;
 
 import java.awt.Dimension;
 import java.awt.Toolkit;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-/*
-import java.time.LocalTime;
-import com.google.zxing.*;
-import com.google.zxing.common.HybridBinarizer;
-import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
-import com.google.zxing.qrcode.QRCodeReader;
-import javax.swing.JLabel;*/
 import javax.swing.JOptionPane;
+
+import org.opencv.core.Core;
 
 
 
@@ -30,18 +27,33 @@ import javax.swing.JOptionPane;
  */
 public class MainPageInst extends BaseFrame {
 
-    // --- Load OpenCV library statically ---
+    // static initializer
     static {
         try {
-            System.load(new java.io.File("C:\\opencv\\build\\java\\x64\\opencv_java4120.dll").getAbsolutePath());
-            System.out.println("OpenCV loaded successfully!");
+            System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+            System.out.println("OpenCV loaded successfully via System.loadLibrary: " + Core.NATIVE_LIBRARY_NAME);
         } catch (UnsatisfiedLinkError e) {
-            System.err.println("Failed to load OpenCV: " + e.getMessage());
+            System.err.println("System.loadLibrary failed: " + e.getMessage());
+            try {
+                String path = DBConfig.getOpenCvDllPath();
+                if (path != null && !path.isEmpty()) {
+                    System.load(path);
+                    System.out.println("OpenCV loaded via absolute path: " + path);
+                } else {
+                    System.err.println("DBConfig OpenCV path is empty. Native library not loaded.");
+                }
+            } catch (Throwable ex) {
+                System.err.println("Failed to load OpenCV native library from DBConfig path: " + ex.getMessage());
+            }
         }
     }
 
     // Camera manager object
     private CameraManager cameraManager;
+
+    // Keep single instances to reuse across navigation
+    private AttendanceLogInst attendanceLogInst;
+    private ViewClasses viewClasses;
 
     // Logged-in user information
     private String InstID;
@@ -51,7 +63,7 @@ public class MainPageInst extends BaseFrame {
     private String LName;
 
     /**
-     * Creates new form MainPage
+     * Creates new form MainPageInst
      */
     public MainPageInst() {
         super(null);
@@ -60,14 +72,15 @@ public class MainPageInst extends BaseFrame {
         useCustomBackground();
         setVisible(true);
         cameraManager = null;
-        
-        addWindowListener(new java.awt.event.WindowAdapter() {
+
+        addWindowListener(new WindowAdapter() {
             @Override
-            public void windowClosing(java.awt.event.WindowEvent e) {
+            public void windowClosing(WindowEvent e) {
                 if (cameraManager != null) cameraManager.stopCamera();
             }
         });
     }
+
     
     @SuppressWarnings("unchecked")
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
@@ -80,7 +93,6 @@ public class MainPageInst extends BaseFrame {
         DisplayLog = new javax.swing.JLabel();
         labelScan = new javax.swing.JLabel();
         panelNavigation = new javax.swing.JPanel();
-        panelPFP = new customElements.Panel();
         DisplayInfo = new javax.swing.JLabel();
         BAttendanceLog = new customElements.NewButton();
         BViewClass = new customElements.NewButton();
@@ -156,19 +168,6 @@ public class MainPageInst extends BaseFrame {
 
         panelNavigation.setBackground(new java.awt.Color(15, 23, 42));
 
-        panelPFP.setBackground(new java.awt.Color(255, 255, 255));
-
-        javax.swing.GroupLayout panelPFPLayout = new javax.swing.GroupLayout(panelPFP);
-        panelPFP.setLayout(panelPFPLayout);
-        panelPFPLayout.setHorizontalGroup(
-            panelPFPLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 169, Short.MAX_VALUE)
-        );
-        panelPFPLayout.setVerticalGroup(
-            panelPFPLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 169, Short.MAX_VALUE)
-        );
-
         DisplayInfo.setFont(new java.awt.Font("Poppins Medium", 0, 14)); // NOI18N
         DisplayInfo.setForeground(new java.awt.Color(255, 255, 255));
         DisplayInfo.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
@@ -207,28 +206,23 @@ public class MainPageInst extends BaseFrame {
         panelNavigationLayout.setHorizontalGroup(
             panelNavigationLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(panelNavigationLayout.createSequentialGroup()
+                .addGap(44, 44, 44)
                 .addGroup(panelNavigationLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING, false)
-                    .addGroup(javax.swing.GroupLayout.Alignment.LEADING, panelNavigationLayout.createSequentialGroup()
-                        .addGap(46, 46, 46)
+                    .addGroup(javax.swing.GroupLayout.Alignment.LEADING, panelNavigationLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                        .addComponent(Logout, javax.swing.GroupLayout.PREFERRED_SIZE, 96, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addGroup(panelNavigationLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(Logout, javax.swing.GroupLayout.PREFERRED_SIZE, 96, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addGroup(panelNavigationLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                .addComponent(BViewClass, javax.swing.GroupLayout.DEFAULT_SIZE, 175, Short.MAX_VALUE)
-                                .addComponent(BAttendanceLog, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE)
-                                .addComponent(BViewProfile, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE))))
+                            .addComponent(BViewClass, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE)
+                            .addComponent(BAttendanceLog, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE)
+                            .addComponent(BViewProfile, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE)))
                     .addGroup(javax.swing.GroupLayout.Alignment.LEADING, panelNavigationLayout.createSequentialGroup()
-                        .addGap(52, 52, 52)
-                        .addGroup(panelNavigationLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                            .addComponent(DisplayInfo, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                            .addComponent(panelPFP, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))))
-                .addContainerGap(49, Short.MAX_VALUE))
+                        .addGap(6, 6, 6)
+                        .addComponent(DisplayInfo, javax.swing.GroupLayout.PREFERRED_SIZE, 169, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                .addContainerGap(51, Short.MAX_VALUE))
         );
         panelNavigationLayout.setVerticalGroup(
             panelNavigationLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(panelNavigationLayout.createSequentialGroup()
-                .addGap(55, 55, 55)
-                .addComponent(panelPFP, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                .addGap(63, 63, 63)
                 .addComponent(DisplayInfo)
                 .addGap(18, 18, 18)
                 .addComponent(BAttendanceLog, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -452,8 +446,10 @@ public class MainPageInst extends BaseFrame {
         }
     }
 
+    // logAttendance(String qrText)
     public void logAttendance(String qrText) {
-        try {
+        try (Connection conn = DBConfig.getConnection()) {
+
             String studID = qrText.trim(); // QR contains the StudID
 
             if (studID.isEmpty()) {
@@ -461,110 +457,83 @@ public class MainPageInst extends BaseFrame {
                 return;
             }
 
-            Connection conn = DriverManager.getConnection(
-                "jdbc:mysql://localhost:3306/classattendance", "root", ""
-            );
-
             // 1. Check if student exists
-            PreparedStatement psStudent = conn.prepareStatement(
-                "SELECT * FROM tblstudent WHERE StudID = ?"
-            );
-            psStudent.setString(1, studID);
-            ResultSet rsStudent = psStudent.executeQuery();
+            try (PreparedStatement psStudent = conn.prepareStatement("SELECT * FROM tblstudent WHERE StudID = ?")) {
+                psStudent.setString(1, studID);
+                try (ResultSet rsStudent = psStudent.executeQuery()) {
+                    if (!rsStudent.next()) {
+                        JOptionPane.showMessageDialog(this, "This student does not exist.", "Error", JOptionPane.ERROR_MESSAGE);
+                        return;
+                    }
 
-            if (!rsStudent.next()) {
-                JOptionPane.showMessageDialog(this, "This student does not exist.", "Error", JOptionPane.ERROR_MESSAGE);
-                rsStudent.close();
-                psStudent.close();
-                conn.close();
-                return;
+                    // 2. Find current schedule for instructor
+                    try (PreparedStatement psSchedule = conn.prepareStatement(
+                            "SELECT * FROM tblschedule WHERE InstID = ? AND DayOfWeek = DAYNAME(CURDATE()) " +
+                                    "AND CURTIME() BETWEEN Start AND End LIMIT 1")) {
+                        psSchedule.setString(1, this.InstID);
+                        try (ResultSet rsSchedule = psSchedule.executeQuery()) {
+                            if (!rsSchedule.next()) {
+                                JOptionPane.showMessageDialog(this, "You have no class this time around.", "Info", JOptionPane.INFORMATION_MESSAGE);
+                                return;
+                            }
+
+                            String schedID = rsSchedule.getString("SchedID");
+                            java.time.LocalTime startTime = rsSchedule.getTime("Start").toLocalTime();
+                            java.time.LocalTime endTime = rsSchedule.getTime("End").toLocalTime();
+                            java.time.LocalTime now = java.time.LocalTime.now();
+
+                            String status;
+                            if (now.isBefore(startTime.plusMinutes(15))) {
+                                status = "Present";
+                            } else if (now.isBefore(endTime)) {
+                                status = "Late";
+                            } else {
+                                status = "Absent";
+                            }
+
+                            // 4. Check if attendance already exists
+                            try (PreparedStatement psCheck = conn.prepareStatement(
+                                    "SELECT * FROM tblattendance WHERE StudID = ? AND SchedID = ? AND DATE(TimeStamp) = CURDATE()")) {
+                                psCheck.setString(1, studID);
+                                psCheck.setString(2, schedID);
+                                try (ResultSet rsCheck = psCheck.executeQuery()) {
+                                    if (rsCheck.next()) {
+                                        JOptionPane.showMessageDialog(this,
+                                                "Attendance already recorded for today for " +
+                                                        rsStudent.getString("FName") + " " + rsStudent.getString("LName"),
+                                                "Duplicate Entry",
+                                                JOptionPane.WARNING_MESSAGE
+                                        );
+                                    } else {
+                                        // 5. Insert attendance
+                                        try (PreparedStatement psInsert = conn.prepareStatement(
+                                                "INSERT INTO tblattendance (StudID, Status, DayOfWeek, TimeStamp, SchedID) " +
+                                                        "VALUES (?, ?, DAYNAME(CURDATE()), NOW(), ?)")) {
+                                            psInsert.setString(1, studID);
+                                            psInsert.setString(2, status);
+                                            psInsert.setString(3, schedID);
+                                            psInsert.executeUpdate();
+                                        }
+
+                                        JOptionPane.showMessageDialog(this,
+                                                "Attendance recorded for " + rsStudent.getString("FName") + " " +
+                                                        rsStudent.getString("LName") + " as " + status,
+                                                "Success",
+                                                JOptionPane.INFORMATION_MESSAGE
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
-
-            // 2. Find current schedule for instructor
-            PreparedStatement psSchedule = conn.prepareStatement(
-                "SELECT * FROM tblschedule WHERE InstID = ? AND DayOfWeek = DAYNAME(CURDATE()) " +
-                "AND CURTIME() BETWEEN Start AND End LIMIT 1"
-            );
-            psSchedule.setString(1, this.InstID); // instructor ID
-            ResultSet rsSchedule = psSchedule.executeQuery();
-
-            if (!rsSchedule.next()) {
-                JOptionPane.showMessageDialog(this, "You have no class this time around.", "Info", JOptionPane.INFORMATION_MESSAGE);
-                rsSchedule.close();
-                psSchedule.close();
-                rsStudent.close();
-                psStudent.close();
-                conn.close();
-                return;
-            }
-
-            String schedID = rsSchedule.getString("SchedID");
-            // Use LocalTime for proper time comparisons
-            java.time.LocalTime startTime = rsSchedule.getTime("Start").toLocalTime();
-            java.time.LocalTime endTime = rsSchedule.getTime("End").toLocalTime();
-            java.time.LocalTime now = java.time.LocalTime.now();
-
-            // 3. Determine attendance status
-            String status;
-            if (now.isBefore(startTime.plusMinutes(15))) {
-                status = "Present";
-            } else if (now.isBefore(endTime)) {
-                status = "Late";
-            } else {
-                status = "Absent";
-            }
-
-            // 4. Check if attendance already exists
-            PreparedStatement psCheck = conn.prepareStatement(
-                "SELECT * FROM tblattendance WHERE StudID = ? AND SchedID = ? AND DATE(TimeStamp) = CURDATE()"
-            );
-            psCheck.setString(1, studID);
-            psCheck.setString(2, schedID);
-            ResultSet rsCheck = psCheck.executeQuery();
-
-            if (rsCheck.next()) {
-                JOptionPane.showMessageDialog(this,
-                    "Attendance already recorded for today for " +
-                    rsStudent.getString("FName") + " " + rsStudent.getString("LName"),
-                    "Duplicate Entry",
-                    JOptionPane.WARNING_MESSAGE
-                );
-            } else {
-                // 5. Insert attendance
-                PreparedStatement psInsert = conn.prepareStatement(
-                    "INSERT INTO tblattendance (StudID, Status, DayOfWeek, TimeStamp, SchedID) " +
-                    "VALUES (?, ?, DAYNAME(CURDATE()), NOW(), ?)"
-                );
-                psInsert.setString(1, studID);
-                psInsert.setString(2, status);
-                psInsert.setString(3, schedID);
-                psInsert.executeUpdate();
-                psInsert.close();
-
-                JOptionPane.showMessageDialog(this,
-                    "Attendance recorded for " + rsStudent.getString("FName") + " " +
-                    rsStudent.getString("LName") + " as " + status,
-                    "Success",
-                    JOptionPane.INFORMATION_MESSAGE
-                );
-            }
-
-            // Close all resources
-            rsCheck.close();
-            psCheck.close();
-            rsSchedule.close();
-            psSchedule.close();
-            rsStudent.close();
-            psStudent.close();
-            conn.close();
 
         } catch (Exception e) {
             e.printStackTrace();
             JOptionPane.showMessageDialog(this, "Error scanning QR: " + e.getMessage());
         }
-    }
-
-    
+    }   
     
     public String getCurrentScheduleInfo() {
         try {
@@ -600,28 +569,24 @@ public class MainPageInst extends BaseFrame {
         }
     }
 
+    // markAbsentAfterClass()
     public void markAbsentAfterClass() {
         new Thread(() -> {
-            try {
-                Connection conn = DriverManager.getConnection(
-                        "jdbc:mysql://localhost:3306/classattendance", "root", ""
-                );
-
-                PreparedStatement ps = conn.prepareStatement(
-                    "INSERT INTO tblattendance (StudID, Status, DayOfWeek, TimeStamp, SchedID) " +
-                    "SELECT s.StudID, 'Absent', DAYNAME(CURDATE()), NOW(), sc.SchedID " +
-                    "FROM tblstudent s " +
-                    "JOIN tblschedule sc ON sc.InstID = ? " +
-                    "WHERE sc.DayOfWeek = DAYNAME(CURDATE()) " +
-                    "AND CURTIME() > sc.End " +
-                    "AND s.StudID NOT IN (" +
-                    "  SELECT StudID FROM tblattendance WHERE SchedID = sc.SchedID AND DATE(TimeStamp) = CURDATE()" +
-                    ")"
-                );
-                ps.setString(1, this.InstID);
-                ps.executeUpdate();
-                ps.close();
-                conn.close();
+            try (Connection conn = DBConfig.getConnection()) {
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "INSERT INTO tblattendance (StudID, Status, DayOfWeek, TimeStamp, SchedID) " +
+                                "SELECT s.StudID, 'Absent', DAYNAME(CURDATE()), NOW(), sc.SchedID " +
+                                "FROM tblstudent s " +
+                                "JOIN tblschedule sc ON sc.InstID = ? " +
+                                "WHERE sc.DayOfWeek = DAYNAME(CURDATE()) " +
+                                "AND CURTIME() > sc.End " +
+                                "AND s.StudID NOT IN (" +
+                                "  SELECT StudID FROM tblattendance WHERE SchedID = sc.SchedID AND DATE(TimeStamp) = CURDATE()" +
+                                ")"
+                )) {
+                    ps.setString(1, this.InstID);
+                    ps.executeUpdate();
+                }
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -635,7 +600,23 @@ public class MainPageInst extends BaseFrame {
     public String getInstructorID() {
         return InstID;
     }
+    
+    // EDIT: method to get (and reuse) that single instance
+    public AttendanceLogInst getAttendanceLogInst() {
+        if (attendanceLogInst == null) {
+            attendanceLogInst = new AttendanceLogInst(this);
+            attendanceLogInst.setLoggedInUser(getInstructorID(), Role, FName, MName, LName);
+        }
+        return attendanceLogInst;
+    }
 
+    public ViewClasses getViewClasses() {
+        if (viewClasses == null) {
+            viewClasses = new ViewClasses(this);
+            viewClasses.setLoggedInUser(getInstructorID(), Role, FName, MName, LName);
+        }
+        return viewClasses;
+    }
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private customElements.NewButton BAttendanceLog;
@@ -653,7 +634,6 @@ public class MainPageInst extends BaseFrame {
     private customElements.NewButton newButton1;
     private customElements.NewButton newButton2;
     private javax.swing.JPanel panelNavigation;
-    private customElements.Panel panelPFP;
     // End of variables declaration//GEN-END:variables
 
 }

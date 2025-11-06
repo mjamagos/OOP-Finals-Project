@@ -15,6 +15,9 @@ import com.google.zxing.*;
 import com.google.zxing.common.HybridBinarizer;
 import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
 
+/**
+ * CameraManager — improved OpenCV load and life cycle handling
+ */
 public class CameraManager extends Thread {
     private VideoCapture camera;
     private JPanel cameraPanel;
@@ -25,9 +28,23 @@ public class CameraManager extends Thread {
 
     private Set<String> scannedQRCodes = new HashSet<>();
 
-    static { System.load("C:\\opencv\\build\\java\\x64\\opencv_java4120.dll"); }
+    static {
+        try {
+            System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+            System.out.println("OpenCV loaded via System.loadLibrary: " + Core.NATIVE_LIBRARY_NAME);
+        } catch (UnsatisfiedLinkError e) {
+            System.err.println("System.loadLibrary failed: " + e.getMessage());
+            try {
+                String path = DBConfig.getOpenCvDllPath();
+                System.load(path);
+                System.out.println("OpenCV loaded via absolute path: " + path);
+            } catch (Throwable ex) {
+                System.err.println("Failed to load OpenCV native library from DBConfig path: " + ex.getMessage());
+            }
+        }
+    }
 
-    public CameraManager(JPanel cameraPanel, JLabel logLabel, JFrame parent) {
+    public CameraManager(JPanel cameraPanel, JLabel logLabel, java.awt.Frame parent) {
         this.cameraPanel = cameraPanel;
         this.logLabel = logLabel;
         this.parentFrame = (MainPageInst) parent;
@@ -44,7 +61,6 @@ public class CameraManager extends Thread {
         running = true;
         Mat frame = new Mat();
 
-        // Open camera if not opened yet
         if (!camera.isOpened()) {
             camera.open(0);
         }
@@ -84,11 +100,16 @@ public class CameraManager extends Thread {
 
             try { Thread.sleep(33); } catch (InterruptedException ignored) {}
         }
+
+        // Ensure camera released when thread ends
+        if (camera != null && camera.isOpened()) {
+            camera.release();
+        }
     }
 
     public void startCamera() {
         if (!running) {
-            if (!camera.isOpened()) camera.open(0); // reopen camera if needed
+            if (!camera.isOpened()) camera.open(0);
             this.start();
         }
     }
@@ -96,7 +117,6 @@ public class CameraManager extends Thread {
     public void stopCamera() {
         running = false;
         scannedQRCodes.clear();
-        // Don't release the camera here yet
     }
 
     public void releaseCamera() {
@@ -104,7 +124,6 @@ public class CameraManager extends Thread {
             camera.release();
         }
     }
-   
 
     private BufferedImage matToBufferedImage(Mat mat) {
         int type = BufferedImage.TYPE_BYTE_GRAY;
