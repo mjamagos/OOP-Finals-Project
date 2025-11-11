@@ -15,6 +15,8 @@ import java.awt.FileDialog;
 import java.awt.Frame;
 import java.awt.Toolkit;
 import java.io.File;
+import java.util.List;
+import javax.swing.DefaultComboBoxModel;
 
 import javax.swing.JPopupMenu;
 import javax.swing.JMenuItem;
@@ -28,7 +30,7 @@ import javax.swing.SwingUtilities;
  */
 public class ViewClasses extends BaseFrame {
     
-    private MainPageInst mainPage;
+    private HomePage homePage;
     private Connection conn;
     private StudentRepo dao; // <- changed type
     private String loggedInInstID;
@@ -41,10 +43,10 @@ public class ViewClasses extends BaseFrame {
     private String MName;
     private String LName;
 
-    public ViewClasses(MainPageInst mainPage) {
-        super(mainPage);
-        this.mainPage = mainPage;
-        this.loggedInInstID = mainPage.getInstructorID();
+    public ViewClasses(HomePage homePage) {
+        super(homePage);
+        this.homePage = homePage;
+        this.loggedInInstID = homePage.getInstructorID(); // initial
         initConnection();
         initComponents();
         initIntegration();
@@ -62,25 +64,46 @@ public class ViewClasses extends BaseFrame {
     private void initComponents() {
 
         jPanel1 = new javax.swing.JPanel();
-        panelNavigation = new javax.swing.JPanel();
-        BackHome = new javax.swing.JLabel();
-        jLabel1 = new javax.swing.JLabel();
-        IDScanner = new customElements.NewButton();
-        AttendanceLog = new customElements.NewButton();
-        BViewProfile = new customElements.NewButton();
-        BLogout = new customElements.NewButton();
         comboYear = new customElements.RoundedComboBox();
         comboSection = new customElements.RoundedComboBox();
         savePDF = new customElements.NewButton();
         comboCourse = new customElements.RoundedComboBox();
         comboSubject = new customElements.RoundedComboBox();
         classTable = new customElements.Classes();
+        BackHome = new javax.swing.JLabel();
+        jLabel1 = new javax.swing.JLabel();
+        IDScanner = new customElements.NewButton();
+        AttendanceLog = new customElements.NewButton();
+        BViewProfile = new customElements.NewButton();
+        BLogout = new customElements.NewButton();
+        jLabel4 = new javax.swing.JLabel();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
-        jPanel1.setBackground(new java.awt.Color(255, 255, 255));
+        jPanel1.setBackground(new java.awt.Color(40, 17, 84));
 
-        panelNavigation.setBackground(new java.awt.Color(15, 23, 42));
+        comboYear.setBackground(new java.awt.Color(228, 226, 226));
+        comboYear.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Year", "1", "2", "3", "4" }));
+        comboYear.setFont(new java.awt.Font("Poppins", 0, 12)); // NOI18N
+
+        comboSection.setBackground(new java.awt.Color(228, 226, 226));
+        comboSection.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Section", "A", "B", "C", "D", "E" }));
+        comboSection.setFont(new java.awt.Font("Poppins", 0, 12)); // NOI18N
+
+        savePDF.setText("Save as PDF");
+        savePDF.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                savePDFActionPerformed(evt);
+            }
+        });
+
+        comboCourse.setBackground(new java.awt.Color(228, 226, 226));
+        comboCourse.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Course", "Computer Science", "Information Technology", "Bachelor in Library and Information Science", "Diploma in Computer Technology", " " }));
+        comboCourse.setFont(new java.awt.Font("Poppins", 0, 12)); // NOI18N
+
+        comboSubject.setBackground(new java.awt.Color(228, 226, 226));
+        comboSubject.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Subject", "Object-Oriented Programming", " ", " " }));
+        comboSubject.setFont(new java.awt.Font("Poppins", 0, 12)); // NOI18N
 
         BackHome.setFont(new java.awt.Font("Poppins Medium", 0, 14)); // NOI18N
         BackHome.setForeground(new java.awt.Color(255, 255, 255));
@@ -111,6 +134,11 @@ public class ViewClasses extends BaseFrame {
         });
 
         BViewProfile.setText("View Profile");
+        BViewProfile.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                BViewProfileActionPerformed(evt);
+            }
+        });
 
         BLogout.setText("Logout");
         BLogout.addActionListener(new java.awt.event.ActionListener() {
@@ -119,89 +147,61 @@ public class ViewClasses extends BaseFrame {
             }
         });
 
-        javax.swing.GroupLayout panelNavigationLayout = new javax.swing.GroupLayout(panelNavigation);
-        panelNavigation.setLayout(panelNavigationLayout);
-        panelNavigationLayout.setHorizontalGroup(
-            panelNavigationLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(panelNavigationLayout.createSequentialGroup()
-                .addGap(24, 24, 24)
-                .addComponent(BackHome)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addComponent(jLabel1)
-                .addGap(18, 18, 18)
-                .addComponent(IDScanner, javax.swing.GroupLayout.PREFERRED_SIZE, 114, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(AttendanceLog, javax.swing.GroupLayout.PREFERRED_SIZE, 119, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(BViewProfile, javax.swing.GroupLayout.PREFERRED_SIZE, 93, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
-                .addComponent(BLogout, javax.swing.GroupLayout.PREFERRED_SIZE, 69, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(30, 30, 30))
-        );
-        panelNavigationLayout.setVerticalGroup(
-            panelNavigationLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(panelNavigationLayout.createSequentialGroup()
-                .addGap(17, 17, 17)
-                .addGroup(panelNavigationLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(BackHome)
-                    .addGroup(panelNavigationLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                        .addComponent(IDScanner, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addComponent(AttendanceLog, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addComponent(BViewProfile, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addComponent(BLogout, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addComponent(jLabel1)))
-                .addContainerGap(20, Short.MAX_VALUE))
-        );
-
-        comboYear.setBackground(new java.awt.Color(228, 226, 226));
-        comboYear.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Year", "1", "2", "3", "4" }));
-        comboYear.setFont(new java.awt.Font("Poppins", 0, 12)); // NOI18N
-
-        comboSection.setBackground(new java.awt.Color(228, 226, 226));
-        comboSection.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Section", "A", "B", "C", "D", "E" }));
-        comboSection.setFont(new java.awt.Font("Poppins", 0, 12)); // NOI18N
-
-        savePDF.setText("Save as PDF");
-        savePDF.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                savePDFActionPerformed(evt);
-            }
-        });
-
-        comboCourse.setBackground(new java.awt.Color(228, 226, 226));
-        comboCourse.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Course", "BS Computer Science", "BS Information Technology", "Bachelor in Library and Information Science", "Diploma in Computer Technology", "" }));
-        comboCourse.setFont(new java.awt.Font("Poppins", 0, 12)); // NOI18N
-
-        comboSubject.setBackground(new java.awt.Color(228, 226, 226));
-        comboSubject.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Subject", "Object-Oriented Programming", " ", " " }));
-        comboSubject.setFont(new java.awt.Font("Poppins", 0, 12)); // NOI18N
+        jLabel4.setForeground(new java.awt.Color(37, 99, 235));
+        jLabel4.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+        jLabel4.setText("________________________________________________________________________________________________________________________________________________");
 
         javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
         jPanel1Layout.setHorizontalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(panelNavigation, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+            .addComponent(jLabel4, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
             .addGroup(jPanel1Layout.createSequentialGroup()
-                .addGap(30, 30, 30)
-                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                    .addComponent(classTable, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(jPanel1Layout.createSequentialGroup()
-                        .addComponent(savePDF, javax.swing.GroupLayout.PREFERRED_SIZE, 124, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addGap(325, 325, 325)
-                        .addComponent(comboCourse, javax.swing.GroupLayout.PREFERRED_SIZE, 114, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addGap(18, 18, 18)
-                        .addComponent(comboSubject, javax.swing.GroupLayout.PREFERRED_SIZE, 114, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addGap(18, 18, 18)
-                        .addComponent(comboYear, javax.swing.GroupLayout.PREFERRED_SIZE, 100, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addGap(18, 18, 18)
-                        .addComponent(comboSection, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                .addContainerGap(29, Short.MAX_VALUE))
+                        .addGap(25, 25, 25)
+                        .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(BackHome)
+                            .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                                .addComponent(classTable, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                                .addGroup(jPanel1Layout.createSequentialGroup()
+                                    .addComponent(savePDF, javax.swing.GroupLayout.PREFERRED_SIZE, 124, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addGap(325, 325, 325)
+                                    .addComponent(comboCourse, javax.swing.GroupLayout.PREFERRED_SIZE, 114, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addGap(18, 18, 18)
+                                    .addComponent(comboSubject, javax.swing.GroupLayout.PREFERRED_SIZE, 114, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addGap(18, 18, 18)
+                                    .addComponent(comboYear, javax.swing.GroupLayout.PREFERRED_SIZE, 100, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addGap(18, 18, 18)
+                                    .addComponent(comboSection, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))))
+                    .addGroup(jPanel1Layout.createSequentialGroup()
+                        .addGap(240, 240, 240)
+                        .addComponent(IDScanner, javax.swing.GroupLayout.PREFERRED_SIZE, 100, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(AttendanceLog, javax.swing.GroupLayout.PREFERRED_SIZE, 119, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(jLabel1)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(BViewProfile, javax.swing.GroupLayout.PREFERRED_SIZE, 93, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(BLogout, javax.swing.GroupLayout.PREFERRED_SIZE, 55, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                .addContainerGap(25, Short.MAX_VALUE))
         );
         jPanel1Layout.setVerticalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel1Layout.createSequentialGroup()
-                .addComponent(panelNavigation, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(18, 18, 18)
+                .addGap(25, 25, 25)
+                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(AttendanceLog, javax.swing.GroupLayout.PREFERRED_SIZE, 23, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(BViewProfile, javax.swing.GroupLayout.PREFERRED_SIZE, 23, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(BLogout, javax.swing.GroupLayout.PREFERRED_SIZE, 23, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jLabel1)
+                    .addComponent(IDScanner, javax.swing.GroupLayout.PREFERRED_SIZE, 23, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jLabel4)
+                .addGap(12, 12, 12)
+                .addComponent(BackHome)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(comboCourse, javax.swing.GroupLayout.PREFERRED_SIZE, 31, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(comboYear, javax.swing.GroupLayout.PREFERRED_SIZE, 31, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -210,7 +210,7 @@ public class ViewClasses extends BaseFrame {
                     .addComponent(savePDF, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addGap(18, 18, 18)
                 .addComponent(classTable, javax.swing.GroupLayout.PREFERRED_SIZE, 520, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(20, Short.MAX_VALUE))
+                .addContainerGap(25, Short.MAX_VALUE))
         );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
@@ -229,12 +229,13 @@ public class ViewClasses extends BaseFrame {
 
     private void BackHomeMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_BackHomeMouseClicked
         this.setVisible(false);
-        mainPage.setVisible(true);
+        homePage.setVisible(true);
     }//GEN-LAST:event_BackHomeMouseClicked
 
     private void IDScannerActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_IDScannerActionPerformed
-        this.setVisible(false);
-        mainPage.setVisible(true);
+        MainPageInst mp = new MainPageInst(homePage);
+        mp.setLoggedInUser(this.InstID, this.Role, this.FName, this.MName, this.LName);
+        mp.setVisible(true);
     }//GEN-LAST:event_IDScannerActionPerformed
 
     private void BLogoutActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_BLogoutActionPerformed
@@ -249,15 +250,33 @@ public class ViewClasses extends BaseFrame {
     }//GEN-LAST:event_BLogoutActionPerformed
 
     private void AttendanceLogActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_AttendanceLogActionPerformed
-        AttendanceLogInst AL = mainPage.getAttendanceLogInst(); // reuse existing instance
+        AttendanceLogInst AL = homePage.getAttendanceLogInst(); // reuse existing instance
         AL.setVisible(true);
         this.setVisible(false);
     }//GEN-LAST:event_AttendanceLogActionPerformed
 
     private void savePDFActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_savePDFActionPerformed
+        String course = (comboCourse.getSelectedIndex() > 0) ? comboCourse.getSelectedItem().toString().trim() : "";
+        String year = (comboYear.getSelectedIndex() > 0) ? comboYear.getSelectedItem().toString().trim() : "";
+        String section = (comboSection.getSelectedIndex() > 0) ? comboSection.getSelectedItem().toString().trim() : "";
+
+        String classInfo = String.join(" ",
+                (course.isEmpty() ? "" : course),
+                (year.isEmpty() ? "" : year),
+                (section.isEmpty() ? "" : section)
+        ).trim();
+
+        String title = "Class Masterlist" + (classInfo.isEmpty() ? "" : ("\n BS " + classInfo));
+
         JTable table = classTable.getTable();
-        PDFExportUtil.exportTable(this, table);
+        PDFExportUtil.exportTable(this, table, title);
     }//GEN-LAST:event_savePDFActionPerformed
+
+    private void BViewProfileActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_BViewProfileActionPerformed
+        dialogViewProfile dvp = new dialogViewProfile(this, true);
+        dvp.setLoggedInUser(this.InstID, this.Role, this.FName, this.MName, this.LName);
+        dvp.setVisible(true);
+    }//GEN-LAST:event_BViewProfileActionPerformed
 
     /**
      * @param args the command line arguments
@@ -289,8 +308,8 @@ public class ViewClasses extends BaseFrame {
         /* Create and display the form */
         java.awt.EventQueue.invokeLater(new Runnable() {
             public void run() {
-                MainPageInst mainPage = new MainPageInst();  
-                ViewClasses viewClass = new ViewClasses(mainPage);
+                HomePage homePage = new HomePage();  
+                ViewClasses viewClass = new ViewClasses(homePage);
                 viewClass.setVisible(true);
             }
         });
@@ -306,21 +325,39 @@ public class ViewClasses extends BaseFrame {
     private void useCustomBackground() {
         try {
             // Load background image
-            java.awt.image.BufferedImage bg = javax.imageio.ImageIO.read(
-                getClass().getResource("/images/Option5.png")
+            final java.awt.image.BufferedImage bg = javax.imageio.ImageIO.read(
+                getClass().getResource("/images/headerQRrive.jpg")
             );
 
-            // Create background panel
-            ImageRenderComponent bgPanel = new ImageRenderComponent(bg);
-            bgPanel.setLayout(new java.awt.BorderLayout());
+            javax.swing.JPanel bgPanel = new javax.swing.JPanel(new java.awt.BorderLayout()) {
+                @Override
+                protected void paintComponent(java.awt.Graphics g) {
+                    super.paintComponent(g);
+                    if (bg == null) return;
 
-            // Makes jPanel transparent so background shows through
+                    java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+                    try {
+                        // High quality rendering hints
+                        g2.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
+                                            java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+                        g2.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING,
+                                            java.awt.RenderingHints.VALUE_RENDER_QUALITY);
+                        g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                                            java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+
+                        // Draw the background image scaled to fill the panel (maintain aspect if you prefer)
+                        int w = getWidth();
+                        int h = getHeight();
+                        g2.drawImage(bg, 0, 0, w, h, this);
+                    } finally {
+                        g2.dispose();
+                    }
+                }
+            };
+
             jPanel1.setOpaque(false);
-
-            // Puts existing jPanel1 on top of the background
             bgPanel.add(jPanel1, java.awt.BorderLayout.CENTER);
 
-            // Replace the frame’s content pane with the background panel
             setContentPane(bgPanel);
             pack(); // resize window correctly
         } catch (Exception e) {
@@ -328,15 +365,21 @@ public class ViewClasses extends BaseFrame {
         }
     }
     
+   @Override
     public void setLoggedInUser(String InstID, String Role, String FName, String MName, String LName) {
-        // Save to fields for later use
         this.InstID = InstID;
         this.Role = Role;
         this.FName = FName;
         this.MName = MName;
         this.LName = LName;
-        
+
+        // keep the internal loggedInInstID in sync
         this.loggedInInstID = InstID;
+
+        // refresh UI pieces
+        //displayName();
+        // reload integration (table + combos)
+        initIntegration();
     }
 
     private void initConnection() {
@@ -368,8 +411,49 @@ public class ViewClasses extends BaseFrame {
     private void initIntegration() {
         if (conn == null || loggedInInstID == null) return;
         classTable.loadData(loggedInInstID, null, null, null, null, conn);
-        classTable.attachFilters(comboCourse, comboSubject, comboYear, comboSection, loggedInInstID, conn);
-        attachClassTableEditPopup();
+        populateFiltersForInstructor();
+
+        if (!integrationInitialized) {
+            classTable.attachFilters(comboCourse, comboSubject, comboYear, comboSection, loggedInInstID, conn);
+            attachClassTableEditPopup();
+            integrationInitialized = true;
+        } else {
+        }
+    }
+    
+        /**
+     * Populate comboCourse, comboSubject, comboYear and comboSection using StudentRepo for the current instructor.
+     */
+    private void populateFiltersForInstructor() {
+        if (dao == null || loggedInInstID == null) return;
+
+        List<String> courses = dao.listCoursesForInstructor(loggedInInstID);
+        DefaultComboBoxModel<String> courseModel = new DefaultComboBoxModel<>();
+        courseModel.addElement("Course");
+        for (String c : courses) courseModel.addElement(c);
+        comboCourse.setModel(courseModel);
+
+        // Subjects: if at least one course exists, prefill subjects with all instructor subjects,
+        // otherwise leave "Subject" only.
+        DefaultComboBoxModel<String> subjectModel = new DefaultComboBoxModel<>();
+        subjectModel.addElement("Subject");
+        List<String> subjects = dao.listSubjectsForInstructor(loggedInInstID, null);
+        for (String s : subjects) subjectModel.addElement(s);
+        comboSubject.setModel(subjectModel);
+
+        // Years
+        DefaultComboBoxModel<String> yearModel = new DefaultComboBoxModel<>();
+        yearModel.addElement("Year");
+        List<String> years = dao.listYearsForInstructor(loggedInInstID);
+        for (String y : years) yearModel.addElement(y);
+        comboYear.setModel(yearModel);
+
+        // Sections
+        DefaultComboBoxModel<String> sectionModel = new DefaultComboBoxModel<>();
+        sectionModel.addElement("Section");
+        List<String> sections = dao.listSectionsForInstructor(loggedInInstID, null);
+        for (String s : sections) sectionModel.addElement(s);
+        comboSection.setModel(sectionModel);
     }
 
     private void attachClassTableEditPopup() {
@@ -424,8 +508,8 @@ public class ViewClasses extends BaseFrame {
     private customElements.RoundedComboBox comboSubject;
     private customElements.RoundedComboBox comboYear;
     private javax.swing.JLabel jLabel1;
+    private javax.swing.JLabel jLabel4;
     private javax.swing.JPanel jPanel1;
-    private javax.swing.JPanel panelNavigation;
     private customElements.NewButton savePDF;
     // End of variables declaration//GEN-END:variables
 }

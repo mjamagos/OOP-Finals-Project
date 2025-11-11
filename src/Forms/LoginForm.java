@@ -11,9 +11,9 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.sql.PreparedStatement;
 import javax.swing.JOptionPane;
+
 
 /**
  * LoginForm.java
@@ -264,7 +264,7 @@ public class LoginForm extends javax.swing.JFrame {
                                 }
                             }
 
-                            MainPageInst f1 = new MainPageInst();
+                            HomePage f1 = new HomePage();
                             f1.setVisible(true);
                             f1.setLoggedInUser(InstID, Role, FName, MName, LName);
                         }
@@ -337,27 +337,45 @@ public class LoginForm extends javax.swing.JFrame {
     }
     
     private void useCustomBackground() {
-    try {
-        // Load background image
-        java.awt.image.BufferedImage bg = javax.imageio.ImageIO.read(
-            getClass().getResource("/images/Option4.png")
-        );
+        try {
+            // Load background image
+            final java.awt.image.BufferedImage bg = javax.imageio.ImageIO.read(
+                getClass().getResource("/images/QRrive.jpg")
+            );
 
-        // Create background panel
-        ImageRenderComponent bgPanel = new ImageRenderComponent(bg);
-        bgPanel.setLayout(new java.awt.BorderLayout());
+            javax.swing.JPanel bgPanel = new javax.swing.JPanel(new java.awt.BorderLayout()) {
+                @Override
+                protected void paintComponent(java.awt.Graphics g) {
+                    super.paintComponent(g);
+                    if (bg == null) return;
 
-        // Makes jPanel transparent so background shows through
-        jPanel1.setOpaque(false);
+                    java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+                    try {
+                        // High quality rendering hints
+                        g2.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
+                                            java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+                        g2.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING,
+                                            java.awt.RenderingHints.VALUE_RENDER_QUALITY);
+                        g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                                            java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
 
-        // Puts existing jPanel1 on top of the background
-        bgPanel.add(jPanel1, java.awt.BorderLayout.CENTER);
+                        // Draw the background image scaled to fill the panel (maintain aspect if you prefer)
+                        int w = getWidth();
+                        int h = getHeight();
+                        g2.drawImage(bg, 0, 0, w, h, this);
+                    } finally {
+                        g2.dispose();
+                    }
+                }
+            };
 
-        // Replace the frame’s content pane with the background panel
-        setContentPane(bgPanel);
-        pack(); // resize window correctly
-    } catch (Exception e) {
-        e.printStackTrace();
+            jPanel1.setOpaque(false);
+            bgPanel.add(jPanel1, java.awt.BorderLayout.CENTER);
+
+            setContentPane(bgPanel);
+            pack(); // resize window correctly
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
     

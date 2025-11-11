@@ -51,7 +51,7 @@ public class SavePDFDialog extends java.awt.Dialog {
             }
         });
 
-        jPanel1.setBackground(new java.awt.Color(15, 23, 42));
+        jPanel1.setBackground(new java.awt.Color(40, 17, 84));
 
         cbPaperSize.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "A4", "Letter", "Legal" }));
         cbPaperSize.setFont(new java.awt.Font("Poppins", 0, 14)); // NOI18N

@@ -9,13 +9,13 @@ import javax.swing.JFrame;
 public abstract class BaseFrame extends JFrame {
 
     // Keep a reference to the main page, can be Instructor or Admin
-    protected JFrame mainPage;
+    protected JFrame homePage;
 
     /**
      * Constructor: accepts any main page (Instructor or Admin)
      */
-    public BaseFrame(JFrame mainPage) {
-        this.mainPage = mainPage;                      // save the main page instance
+    public BaseFrame(JFrame homePage) {
+        this.homePage = homePage;                      // save the main page instance
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // close the whole app when this frame closes
         setLocationRelativeTo(null);                   // center the frame on screen
     }
@@ -25,8 +25,8 @@ public abstract class BaseFrame extends JFrame {
      */
     protected void goBackToMain() {
         this.setVisible(false);  // hide current frame
-        if (mainPage != null) {
-            mainPage.setVisible(true); // show the main page again
+        if (homePage != null) {
+            homePage.setVisible(true); // show the main page again
         }
     }
 

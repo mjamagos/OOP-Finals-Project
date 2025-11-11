@@ -17,6 +17,13 @@ import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
 
 /**
  * CameraManager — improved OpenCV load and life cycle handling
+ *
+ * Behavior changes:
+ * - QR detection no longer performs DB or UI work on the EDT.
+ * - When a QR is detected we spawn a background worker thread that:
+ *     1) obtains the current schedule info from MainPageInst (off-EDT),
+ *     2) calls MainPageInst.processAttendanceSync(qrText) (off-EDT),
+ *     3) posts UI updates (log label / result dialog) on the EDT.
  */
 public class CameraManager extends Thread {
     private VideoCapture camera;
@@ -24,7 +31,7 @@ public class CameraManager extends Thread {
     private JLabel cameraLabel;
     private JLabel logLabel;
     private MainPageInst parentFrame;
-    private boolean running = false;
+    private volatile boolean running = false;
 
     private Set<String> scannedQRCodes = new HashSet<>();
 
@@ -36,24 +43,34 @@ public class CameraManager extends Thread {
             System.err.println("System.loadLibrary failed: " + e.getMessage());
             try {
                 String path = DBConfig.getOpenCvDllPath();
-                System.load(path);
-                System.out.println("OpenCV loaded via absolute path: " + path);
+                if (path != null && !path.isEmpty()) {
+                    System.load(path);
+                    System.out.println("OpenCV loaded via absolute path: " + path);
+                }
             } catch (Throwable ex) {
                 System.err.println("Failed to load OpenCV native library from DBConfig path: " + ex.getMessage());
             }
         }
     }
 
-    public CameraManager(JPanel cameraPanel, JLabel logLabel, java.awt.Frame parent) {
+    /**
+     * Constructor explicitly accepts MainPageInst (no casting needed).
+     *
+     * @param cameraPanel panel where frames will be shown
+     * @param logLabel label to display scan messages
+     * @param parent the MainPageInst that owns the camera UI
+     */
+    public CameraManager(JPanel cameraPanel, JLabel logLabel, MainPageInst parent) {
         this.cameraPanel = cameraPanel;
         this.logLabel = logLabel;
-        this.parentFrame = (MainPageInst) parent;
+        this.parentFrame = parent;
 
         cameraLabel = new JLabel();
         cameraPanel.setLayout(new BorderLayout());
         cameraPanel.add(cameraLabel, BorderLayout.CENTER);
 
         camera = new VideoCapture();
+        setName("CameraManager");
     }
 
     @Override
@@ -81,17 +98,29 @@ public class CameraManager extends Thread {
                         if (!scannedQRCodes.contains(qrText)) {
                             scannedQRCodes.add(qrText);
 
-                            SwingUtilities.invokeLater(() -> {
+                            // Do DB work off the EDT to avoid UI freeze
+                            new Thread(() -> {
+                                // 1) Get active class info (off-EDT)
                                 String activeClass = parentFrame.getCurrentScheduleInfo();
-                                parentFrame.logAttendance(qrText);
-                                logLabel.setText("Scanned: " + qrText + " | Class: " + activeClass);
-                            });
+
+                                // 2) Process attendance synchronously (DB work off-EDT).
+                                MainPageInst.AttendanceResult res = parentFrame.processAttendanceSync(qrText);
+
+                                // 3) Update UI on EDT: set log label and show a dialog if needed.
+                                SwingUtilities.invokeLater(() -> {
+                                    logLabel.setText("Scanned: " + qrText + " | Class: " + activeClass);
+                                    if (res != null && res.message != null && !res.message.isEmpty()) {
+                                        JOptionPane.showMessageDialog(parentFrame, res.message, "Scan Result", res.messageType);
+                                    }
+                                });
+                            }, "Camera-QR-Worker").start();
                         }
                     }
                 } catch (NotFoundException | ChecksumException | FormatException ignored) {}
 
                 ImageIcon icon = new ImageIcon(image);
 
+                // Only UI update for preview icon on EDT
                 SwingUtilities.invokeLater(() -> {
                     cameraLabel.setIcon(icon);
                     parentFrame.hideCameraLabel();
@@ -117,6 +146,7 @@ public class CameraManager extends Thread {
     public void stopCamera() {
         running = false;
         scannedQRCodes.clear();
+        // thread will exit loop and release camera in run()
     }
 
     public void releaseCamera() {

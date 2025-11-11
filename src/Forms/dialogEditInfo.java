@@ -9,6 +9,8 @@ import java.awt.Frame;
 import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
 import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Map;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JOptionPane;
 import javax.swing.WindowConstants;
@@ -20,24 +22,20 @@ import javax.swing.WindowConstants;
 
 public class dialogEditInfo extends javax.swing.JDialog {
 
-    private StudentRepo dao;        // <- changed to StudentRepo
-    private String studentID;      // selected student ID (StudID)
+    private StudentRepo dao;
+    private String studentID;
+    private StudentRow originalRow;
 
-    /**
-     * Preferred constructor: accepts StudentRepo.
-     */
-    // Preferred constructor: accepts StudentRepo.
     public dialogEditInfo(Frame parent, boolean modal, StudentRepo dao, String studentID) {
         super(parent, modal);
         this.dao = dao;
         this.studentID = studentID;
-        initComponents(); // create UI (GroupLayout attached to jPanel1 here)
+        initComponents();
         setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
         pack();
         setLocationRelativeTo(parent);
     }
 
-    // Backwards-compatible constructor: accepts Connection and wraps it in a repo.
     public dialogEditInfo(Frame parent, boolean modal, java.sql.Connection conn, String studentID) {
         super(parent, modal);
         this.dao = conn == null ? null : new StudentRepo(conn);
@@ -68,10 +66,6 @@ public class dialogEditInfo extends javax.swing.JDialog {
         tfMName = new customElements.NewTextField();
         lblLName = new javax.swing.JLabel();
         tfLName = new customElements.NewTextField();
-        lblSub = new javax.swing.JLabel();
-        tfSubject = new customElements.NewTextField();
-        lblCourse = new javax.swing.JLabel();
-        tfCourse = new customElements.NewTextField();
         lblYear = new javax.swing.JLabel();
         lblSection = new javax.swing.JLabel();
 
@@ -145,26 +139,6 @@ public class dialogEditInfo extends javax.swing.JDialog {
             }
         });
 
-        lblSub.setFont(new java.awt.Font("Poppins", 0, 14)); // NOI18N
-        lblSub.setText("Subject");
-
-        tfSubject.setText("newTextField1");
-        tfSubject.addKeyListener(new java.awt.event.KeyAdapter() {
-            public void keyReleased(java.awt.event.KeyEvent evt) {
-                tfSubjectKeyReleased(evt);
-            }
-        });
-
-        lblCourse.setFont(new java.awt.Font("Poppins", 0, 14)); // NOI18N
-        lblCourse.setText("Course");
-
-        tfCourse.setText("newTextField1");
-        tfCourse.addKeyListener(new java.awt.event.KeyAdapter() {
-            public void keyReleased(java.awt.event.KeyEvent evt) {
-                tfCourseKeyReleased(evt);
-            }
-        });
-
         lblYear.setFont(new java.awt.Font("Poppins", 0, 14)); // NOI18N
         lblYear.setText("Year");
 
@@ -191,9 +165,7 @@ public class dialogEditInfo extends javax.swing.JDialog {
                                     .addComponent(lblYear)
                                     .addComponent(lblFName)
                                     .addComponent(lblMName)
-                                    .addComponent(lblLName)
-                                    .addComponent(lblSub)
-                                    .addComponent(lblCourse))
+                                    .addComponent(lblLName))
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                                 .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
                                     .addGroup(jPanel2Layout.createSequentialGroup()
@@ -204,9 +176,7 @@ public class dialogEditInfo extends javax.swing.JDialog {
                                         .addComponent(cbSection, javax.swing.GroupLayout.PREFERRED_SIZE, 96, javax.swing.GroupLayout.PREFERRED_SIZE))
                                     .addComponent(tfFName, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                                     .addComponent(tfMName, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                                    .addComponent(tfLName, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                                    .addComponent(tfSubject, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                                    .addComponent(tfCourse, javax.swing.GroupLayout.PREFERRED_SIZE, 265, javax.swing.GroupLayout.PREFERRED_SIZE))))
+                                    .addComponent(tfLName, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))))
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 30, Short.MAX_VALUE)))
                 .addContainerGap())
         );
@@ -227,14 +197,6 @@ public class dialogEditInfo extends javax.swing.JDialog {
                 .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(lblLName)
                     .addComponent(tfLName, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 12, Short.MAX_VALUE)
-                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(lblSub)
-                    .addComponent(tfSubject, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addGap(12, 12, 12)
-                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(lblCourse)
-                    .addComponent(tfCourse, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addGap(18, 18, 18)
                 .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(lblYear)
@@ -245,7 +207,7 @@ public class dialogEditInfo extends javax.swing.JDialog {
                 .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(buttonSave, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(buttonCancel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addGap(15, 15, 15))
+                .addContainerGap(35, Short.MAX_VALUE))
         );
 
         getContentPane().add(jPanel2, java.awt.BorderLayout.CENTER);
@@ -297,24 +259,6 @@ public class dialogEditInfo extends javax.swing.JDialog {
         }
     }//GEN-LAST:event_tfLNameKeyReleased
 
-    private void tfSubjectKeyReleased(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_tfSubjectKeyReleased
-        int key = evt.getKeyCode();
-        if (key == KeyEvent.VK_ENTER) {
-            Toolkit.getDefaultToolkit().beep();   
-            //System.out.println("ENTER pressed");
-            buttonSave.doClick(500);
-        }
-    }//GEN-LAST:event_tfSubjectKeyReleased
-
-    private void tfCourseKeyReleased(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_tfCourseKeyReleased
-        int key = evt.getKeyCode();
-        if (key == KeyEvent.VK_ENTER) {
-            Toolkit.getDefaultToolkit().beep();   
-            //System.out.println("ENTER pressed");
-            buttonSave.doClick(500);
-        }
-    }//GEN-LAST:event_tfCourseKeyReleased
-
     private void cbYearKeyReleased(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_cbYearKeyReleased
         int key = evt.getKeyCode();
         if (key == KeyEvent.VK_ENTER) {
@@ -340,61 +284,82 @@ public class dialogEditInfo extends javax.swing.JDialog {
         this.setLocation(left, top);
     }
     
-    // replace the existing saveChanges() method with this
-    public void saveChanges() {
+    /**
+     * Save changes: only update student columns that changed (whitelisted).
+     * Returns true if update applied.
+     */
+    public boolean saveChanges() {
         if (dao == null) {
             JOptionPane.showMessageDialog(this, "No database connection available", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
+            return false;
         }
-        try {
-            // Build the updated values from the dialog fields
-            StudentRow updated = new StudentRow(
-                studentID, // may be empty; we'll resolve below if needed
-                tfFName.getText(),
-                tfMName.getText(),
-                tfLName.getText(),
-                tfSubject.getText(),
-                tfCourse.getText(),
-                cbYear.getSelectedItem() == null ? "" : cbYear.getSelectedItem().toString(),
-                cbSection.getSelectedItem() == null ? "" : cbSection.getSelectedItem().toString()
-            );
 
-            // Ensure we have a valid StudID to update
+        try {
             String targetStudID = (studentID == null) ? "" : studentID.trim();
             if (targetStudID.isEmpty()) {
-                // Try to resolve StudID by matching the student row values
-                String found = dao.findStudID(updated);
+                StudentRow lookup = new StudentRow("", tfFName.getText(), tfMName.getText(), tfLName.getText(), "", "",
+                        cbYear.getSelectedItem() == null ? "" : cbYear.getSelectedItem().toString(),
+                        cbSection.getSelectedItem() == null ? "" : cbSection.getSelectedItem().toString());
+                String found = dao.findStudID(lookup);
                 if (found == null || found.isEmpty()) {
                     JOptionPane.showMessageDialog(this,
                         "Cannot determine the student's ID (StudID). Please open the edit dialog from a student row or ensure the student exists in the database.",
                         "Can't locate student", JOptionPane.ERROR_MESSAGE);
-                    return;
+                    return false;
                 }
                 targetStudID = found;
             }
 
-            boolean ok = dao.updateStudent(targetStudID, updated);
-            if (ok) {
-                //JOptionPane.showMessageDialog(this, "Student information updated successfully!");
-                this.dispose();
-            } else {
-                JOptionPane.showMessageDialog(this, "Update failed");
+            if (originalRow == null || originalRow.studID == null || originalRow.studID.isEmpty()) {
+                StudentRow dbRow = dao.fetchStudentByID(targetStudID);
+                if (dbRow != null) originalRow = dbRow;
             }
+
+            Map<String, String> changes = new HashMap<>();
+
+            String newF = tfFName.getText() == null ? "" : tfFName.getText().trim();
+            String newM = tfMName.getText() == null ? "" : tfMName.getText().trim();
+            String newL = tfLName.getText() == null ? "" : tfLName.getText().trim();
+            String newYear = cbYear.getSelectedItem() == null ? "" : cbYear.getSelectedItem().toString();
+            String newSection = cbSection.getSelectedItem() == null ? "" : cbSection.getSelectedItem().toString();
+
+            String origF = (originalRow == null || originalRow.fname == null) ? "" : originalRow.fname;
+            String origM = (originalRow == null || originalRow.mname == null) ? "" : originalRow.mname;
+            String origL = (originalRow == null || originalRow.lname == null) ? "" : originalRow.lname;
+            String origYear = (originalRow == null || originalRow.year == null) ? "" : originalRow.year;
+            String origSection = (originalRow == null || originalRow.section == null) ? "" : originalRow.section;
+
+            if (!newF.equals(origF)) changes.put("FName", newF);
+            if (!newM.equals(origM)) changes.put("MName", newM);
+            if (!newL.equals(origL)) changes.put("LName", newL);
+            if (!newYear.equals(origYear)) changes.put("Year", newYear);
+            if (!newSection.equals(origSection)) changes.put("Section", newSection);
+
+            if (changes.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "No changes detected.", "Nothing to save", JOptionPane.INFORMATION_MESSAGE);
+                return false;
+            }
+
+            boolean ok = dao.updateStudentFields(targetStudID, changes);
+            if (!ok) {
+                JOptionPane.showMessageDialog(this, "Update failed", "Error", JOptionPane.ERROR_MESSAGE);
+                return false;
+            }
+            return true;
         } catch (SQLException ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(this, "Error updating database: " + ex.getMessage(), "DB Error", JOptionPane.ERROR_MESSAGE);
+            return false;
         }
     }
 
     public void loadData(String FName, String MName, String LName, String SubName, String CourseName, String Year, String Section) {
-        // set text fields
         tfFName.setText(FName);
         tfMName.setText(MName);
         tfLName.setText(LName);
-        tfSubject.setText(SubName);
-        tfCourse.setText(CourseName);
 
-        // select Year/Section robustly: add value if not present
+        this.originalRow = new StudentRow(studentID == null ? "" : studentID, FName, MName, LName, SubName == null ? "" : SubName, CourseName == null ? "" : CourseName, Year, Section);
+
         if (Year != null && !Year.isEmpty()) {
             DefaultComboBoxModel yearModel = (DefaultComboBoxModel) cbYear.getModel();
             if (yearModel.getIndexOf(Year) == -1) yearModel.addElement(Year);
@@ -411,13 +376,10 @@ public class dialogEditInfo extends javax.swing.JDialog {
             cbSection.setSelectedIndex(-1);
         }
 
-        // Refresh UI
         javax.swing.SwingUtilities.invokeLater(() -> {
             tfFName.revalidate(); tfFName.repaint();
             tfMName.revalidate(); tfMName.repaint();
             tfLName.revalidate(); tfLName.repaint();
-            tfSubject.revalidate(); tfSubject.repaint();
-            tfCourse.revalidate(); tfCourse.repaint();
             cbYear.revalidate(); cbYear.repaint();
             cbSection.revalidate(); cbSection.repaint();
         });
@@ -433,18 +395,14 @@ public class dialogEditInfo extends javax.swing.JDialog {
     private customElements.RoundedComboBox cbSection;
     private customElements.RoundedComboBox cbYear;
     private javax.swing.JPanel jPanel2;
-    private javax.swing.JLabel lblCourse;
     private javax.swing.JLabel lblEditStudInfo;
     private javax.swing.JLabel lblFName;
     private javax.swing.JLabel lblLName;
     private javax.swing.JLabel lblMName;
     private javax.swing.JLabel lblSection;
-    private javax.swing.JLabel lblSub;
     private javax.swing.JLabel lblYear;
-    private customElements.NewTextField tfCourse;
     private customElements.NewTextField tfFName;
     private customElements.NewTextField tfLName;
     private customElements.NewTextField tfMName;
-    private customElements.NewTextField tfSubject;
     // End of variables declaration//GEN-END:variables
 }

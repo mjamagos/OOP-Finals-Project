@@ -3,20 +3,15 @@ package Forms;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * StudentRepo — single place for student/attendance related DB operations.
  *
- * This file provides the methods that UI code expects:
- *   - findStudID(StudentRow)
- *   - fetchStudentByID(String)
- *   - updateStudent(String, StudentRow)
- *   - deleteAttendanceByStudID(String)
- *   - deleteAttendanceForStudOnDate(String, Date)
- *   - deleteAttendanceById(String)
- *   - findAttendanceMatches(...)
- *
- * Note: The attendance table primary key column is AttendID (not AttendanceID).
+ * Safety:
+ *  - updateStudent() only updates tblstudent columns.
+ *  - updateStudentFields() updates only whitelisted tblstudent columns.
+ *  - No code here will update tblcourse or tblsubject.
  */
 public class StudentRepo {
     private final Connection conn;
@@ -28,16 +23,6 @@ public class StudentRepo {
     // -----------------------------
     // Student lookups / fetch
     // -----------------------------
-    /**
-     * Find a StudID from student-identifying fields.
-     *
-     * This version is tolerant:
-     *  - compares lowercase trimmed names,
-     *  - treats empty MName/Year/Section as "don't care" (matches any),
-     *  - returns the first matching StudID (LIMIT 1).
-     *
-     * Prefer having the StudID available in the table model; this is a best-effort helper.
-     */
     public String findStudID(StudentRow row) {
         if (conn == null || row == null) return "";
         String sql =
@@ -73,10 +58,6 @@ public class StudentRepo {
         return "";
     }
 
-    /**
-     * Fetch authoritative student data from DB by StudID.
-     * Returns null if not found.
-     */
     public StudentRow fetchStudentByID(String studID) {
         if (conn == null || studID == null || studID.isEmpty()) return null;
         String sql = "SELECT FName, MName, LName, Year, Section, CourseID FROM tblstudent WHERE StudID = ?";
@@ -94,14 +75,13 @@ public class StudentRepo {
 
                 String courseID = rs.getString("CourseID");
                 if (courseID != null && !courseID.isEmpty()) {
-                    // try get course name
-                    try (PreparedStatement pc = conn.prepareStatement("SELECT CourseName FROM tblcourse WHERE CourseID = ?")) {
+                    // best-effort read - do NOT write here
+                    try (PreparedStatement pc = conn.prepareStatement("SELECT CourseName FROM tblcourse WHERE CourseID = ? LIMIT 1")) {
                         pc.setString(1, courseID);
                         try (ResultSet rc = pc.executeQuery()) {
                             if (rc.next()) course = rc.getString("CourseName");
                         }
                     } catch (SQLException ignored) {}
-                    // try get subject name (first subject for course)
                     try (PreparedStatement ps = conn.prepareStatement("SELECT SubName FROM tblsubject WHERE CourseID = ? LIMIT 1")) {
                         ps.setString(1, courseID);
                         try (ResultSet rs2 = ps.executeQuery()) {
@@ -117,9 +97,6 @@ public class StudentRepo {
         return null;
     }
 
-    /**
-     * Get CourseID (as String) for a student.
-     */
     public String getCourseIDForStudent(String studID) {
         if (conn == null || studID == null || studID.isEmpty()) return null;
         String sql = "SELECT CourseID FROM tblstudent WHERE StudID = ?";
@@ -135,11 +112,11 @@ public class StudentRepo {
     }
 
     // -----------------------------
-    // Update student
+    // Update student (safe)
     // -----------------------------
     /**
-     * Update student core fields and the related course/subject names if CourseID exists.
-     * Returns true on success. May throw SQLException to caller if desired - currently catches and returns false.
+     * Legacy method: updates only the tblstudent fields for the given StudID.
+     * Intentionally does NOT write to tblcourse/tblsubject.
      */
     public boolean updateStudent(String studID, StudentRow updated) throws SQLException {
         if (conn == null) throw new SQLException("No DB connection");
@@ -153,24 +130,44 @@ public class StudentRepo {
             pst.setString(4, updated.year);
             pst.setString(5, updated.section);
             pst.setString(6, studID);
-            pst.executeUpdate();
+            int affected = pst.executeUpdate();
+            return affected > 0;
         }
+    }
 
-        // update course/subject names if a course exists for that student
-        String courseID = getCourseIDForStudent(studID);
-        if (courseID != null && !courseID.isEmpty()) {
-            try (PreparedStatement pc = conn.prepareStatement("UPDATE tblcourse SET CourseName = ? WHERE CourseID = ?")) {
-                pc.setString(1, updated.course == null ? "" : updated.course);
-                pc.setString(2, courseID);
-                pc.executeUpdate();
-            }
-            try (PreparedStatement ps = conn.prepareStatement("UPDATE tblsubject SET SubName = ? WHERE CourseID = ?")) {
-                ps.setString(1, updated.subject == null ? "" : updated.subject);
-                ps.setString(2, courseID);
-                ps.executeUpdate();
-            }
+    /**
+     * Update only the specified student columns for the given StudID.
+     * fields keys must be column names from tblstudent; only the safe whitelist is allowed.
+     */
+    public boolean updateStudentFields(String studID, Map<String, String> fields) throws SQLException {
+        if (conn == null) throw new SQLException("No DB connection");
+        if (studID == null || studID.isEmpty()) throw new SQLException("Invalid StudID");
+        if (fields == null || fields.isEmpty()) return true; // nothing to do
+
+        List<String> allowed = List.of("FName", "MName", "LName", "Year", "Section");
+
+        List<String> cols = new ArrayList<>();
+        for (String k : fields.keySet()) {
+            if (allowed.contains(k)) cols.add(k);
         }
-        return true;
+        if (cols.isEmpty()) return true;
+
+        StringBuilder sb = new StringBuilder("UPDATE tblstudent SET ");
+        for (int i = 0; i < cols.size(); i++) {
+            sb.append(cols.get(i)).append(" = ?");
+            if (i < cols.size() - 1) sb.append(", ");
+        }
+        sb.append(" WHERE StudID = ?");
+
+        try (PreparedStatement pst = conn.prepareStatement(sb.toString())) {
+            int idx = 1;
+            for (String col : cols) {
+                pst.setString(idx++, fields.get(col));
+            }
+            pst.setString(idx, studID);
+            int affected = pst.executeUpdate();
+            return affected > 0;
+        }
     }
 
     // -----------------------------
@@ -188,10 +185,6 @@ public class StudentRepo {
         }
     }
 
-    /**
-     * Delete attendance rows for a student on a specific date.
-     * If date==null deletes all attendance rows for that student.
-     */
     public boolean deleteAttendanceForStudOnDate(String studID, java.sql.Date date) {
         if (conn == null || studID == null || studID.isEmpty()) return false;
         String sql = (date == null)
@@ -208,9 +201,6 @@ public class StudentRepo {
         }
     }
 
-    /**
-     * Delete a single attendance record by its primary key (AttendID).
-     */
     public boolean deleteAttendanceById(String attendId) {
         if (conn == null || attendId == null || attendId.isEmpty()) return false;
         String sql = "DELETE FROM tblattendance WHERE AttendID = ?";
@@ -225,15 +215,8 @@ public class StudentRepo {
     }
 
     // -----------------------------
-    // Attendance lookup helpers
+    // Attendance lookup helpers (unchanged)
     // -----------------------------
-    /**
-     * Try to find StudID by matching attendance rows joined with student/course/subject.
-     * Returns empty string if not found.
-     *
-     * NOTE: this is a best-effort helper for UIs that don't include StudID in the model.
-     * Prefer storing attendance PK (AttendID) and deleting by PK when possible.
-     */
     public String findStudIDFromAttendanceRow(StudentRow row, String courseName, String subjectName, java.sql.Date date) {
         if (conn == null || row == null) return "";
         String sql =
@@ -274,13 +257,6 @@ public class StudentRepo {
         return "";
     }
 
-    /**
-     * Find attendance rows that match the supplied visible row data.
-     * Returns a list (possibly empty) of AttendanceRecord objects.
-     *
-     * If date is null, the SQL does not filter by date (wider search).
-     * Use java.sql.Date.valueOf(LocalDate.now()) to restrict to today's attendance.
-     */
     public List<AttendanceRecord> findAttendanceMatches(StudentRow row, String courseName, String subjectName, java.sql.Date date) {
         List<AttendanceRecord> out = new ArrayList<>();
         if (conn == null || row == null) return out;
@@ -342,6 +318,159 @@ public class StudentRepo {
 
                     AttendanceRecord ar = new AttendanceRecord(attendId, studID, schedID, ts, status, cName, sName, f, m, l, y, sec);
                     out.add(ar);
+                }
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        return out;
+    }
+
+    public InstructorInfo fetchInstructorByID(String instID) {
+        if (conn == null || instID == null || instID.isEmpty()) return null;
+
+        String sql = "SELECT * FROM tblinstructor WHERE InstID = ? LIMIT 1";
+        try (PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setString(1, instID);
+            try (ResultSet rs = pst.executeQuery()) {
+                if (!rs.next()) return null;
+
+                String fname = safeGet(rs, "FName");
+                String mname = safeGet(rs, "MName");
+                String lname = safeGet(rs, "LName");
+                String email = safeGet(rs, "Email");
+                if ((email == null || email.isEmpty())) email = safeGet(rs, "EmailAddress");
+                String address = safeGet(rs, "Address");
+                String college = safeGet(rs, "College");
+
+                String collegeId = safeGet(rs, "CollegeID");
+                if ((college == null || college.isEmpty()) && collegeId != null && !collegeId.isEmpty()) {
+                    try (PreparedStatement pc = conn.prepareStatement("SELECT CollegeName FROM tblcollege WHERE CollegeID = ? LIMIT 1")) {
+                        pc.setString(1, collegeId);
+                        try (ResultSet rc = pc.executeQuery()) {
+                            if (rc.next()) college = rc.getString(1);
+                        }
+                    } catch (Exception ignored) {}
+                }
+
+                String department = safeGet(rs, "Department");
+                if ((department == null || department.isEmpty())) {
+                    String[] depIdCols = { "DepID", "depId", "departmentid", "DepartmentID", "Dep_Id" };
+                    for (String c : depIdCols) {
+                        String val = safeGet(rs, c);
+                        if (val != null && !val.isEmpty()) {
+                            try (PreparedStatement pd = conn.prepareStatement("SELECT depName FROM tbldepartment WHERE depId = ? LIMIT 1")) {
+                                pd.setString(1, val);
+                                try (ResultSet rd = pd.executeQuery()) {
+                                    if (rd.next()) {
+                                        department = rd.getString(1);
+                                        break;
+                                    }
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                    }
+                }
+
+                String university = "University of Northern Philippines";
+                return new InstructorInfo(instID, fname, mname, lname, email, address, department, college, university);
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            return null;
+        }
+    }
+
+    private String safeGet(ResultSet rs, String col) {
+        try {
+            if (col == null || col.isEmpty()) return "";
+            try {
+                String v = rs.getString(col);
+                return v == null ? "" : v;
+            } catch (SQLException se) {
+                return "";
+            }
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    public List<String> listCoursesForInstructor(String instID) {
+        List<String> out = new ArrayList<>();
+        if (conn == null || instID == null || instID.isEmpty()) return out;
+        String sql =
+            "SELECT DISTINCT c.CourseName " +
+            "FROM tblschedule sc " +
+            "JOIN tblsubject sub ON sc.SubID = sub.SubID " +
+            "JOIN tblcourse c ON sub.CourseID = c.CourseID " +
+            "WHERE sc.InstID = ? " +
+            "ORDER BY c.CourseName";
+        try (PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setString(1, instID);
+            try (ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) out.add(rs.getString(1));
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        return out;
+    }
+
+    public List<String> listSubjectsForInstructor(String instID, String courseName) {
+        List<String> out = new ArrayList<>();
+        if (conn == null || instID == null || instID.isEmpty()) return out;
+        String sql =
+            "SELECT DISTINCT sub.SubName " +
+            "FROM tblschedule sc " +
+            "JOIN tblsubject sub ON sc.SubID = sub.SubID " +
+            "JOIN tblcourse c ON sub.CourseID = c.CourseID " +
+            "WHERE sc.InstID = ? " +
+            (courseName == null || courseName.isEmpty() ? "" : " AND c.CourseName = ? ") +
+            "ORDER BY sub.SubName";
+        try (PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setString(1, instID);
+            if (courseName != null && !courseName.isEmpty()) pst.setString(2, courseName);
+            try (ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) out.add(rs.getString(1));
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        return out;
+    }
+
+    public List<String> listYearsForInstructor(String instID) {
+        List<String> out = new ArrayList<>();
+        if (conn == null || instID == null || instID.isEmpty()) return out;
+        String sql = "SELECT DISTINCT sc.Year FROM tblschedule sc WHERE sc.InstID = ? ORDER BY sc.Year";
+        try (PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setString(1, instID);
+            try (ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    String y = rs.getString(1);
+                    if (y != null && !y.isEmpty()) out.add(y);
+                }
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        return out;
+    }
+
+    public List<String> listSectionsForInstructor(String instID, String year) {
+        List<String> out = new ArrayList<>();
+        if (conn == null || instID == null || instID.isEmpty()) return out;
+        String sql =
+            "SELECT DISTINCT sc.Section FROM tblschedule sc WHERE sc.InstID = ? " +
+            (year == null || year.isEmpty() ? "" : " AND sc.Year = ? ") +
+            "ORDER BY sc.Section";
+        try (PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setString(1, instID);
+            if (year != null && !year.isEmpty()) pst.setString(2, year);
+            try (ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    String s = rs.getString(1);
+                    if (s != null && !s.isEmpty()) out.add(s);
                 }
             }
         } catch (SQLException ex) {

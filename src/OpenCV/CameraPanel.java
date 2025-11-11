@@ -22,7 +22,7 @@ public class CameraPanel extends JPanel {
     private boolean running = false;
 
     public CameraPanel() {
-        this.setPreferredSize(new Dimension(640, 480));
+        this.setPreferredSize(new Dimension(640, 420));
     }
 
     public void startCamera() {

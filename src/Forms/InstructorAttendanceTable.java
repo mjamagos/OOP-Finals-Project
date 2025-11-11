@@ -4,6 +4,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.text.SimpleDateFormat;
+import java.sql.Timestamp;
 import javax.swing.BorderFactory;
 import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
@@ -16,6 +18,10 @@ import javax.swing.table.JTableHeader;
  * InstructorAttendanceTable — builds the table model that AttendanceLogInst uses.
  *
  * NOTE: uses AttendID as the attendance PK column name.
+ *
+ * Changed columns to:
+ *   Course Name, Subject, ID Number, Last Name, Middle Name, First Name, Year, Section, Date, Status
+ * and kept AttendID as a hidden internal column at the end.
  */
 public class InstructorAttendanceTable {
 
@@ -28,13 +34,13 @@ public class InstructorAttendanceTable {
         this.conn = conn;
         this.table = existingTable;
 
-        // columns: last two are hidden internal IDs
+        // Visible columns (AttendID is appended as a hidden internal column)
         String[] columns = {
             "Course Name", "Subject",
-            "Last Name", "First Name", "Middle Name",
+            "ID Number", "Last Name", "Middle Name", "First Name",
             "Year", "Section",
-            "Schedule", "Day", "Time In", "Status",
-            "AttendID", "StudID"
+            "Date", "Status",
+            "AttendID" // hidden internal PK (keep at the end so hideInternalColumnsIfPresent hides it)
         };
 
         tableModel = new DefaultTableModel(columns, 0) {
@@ -90,15 +96,11 @@ public class InstructorAttendanceTable {
     private void hideInternalColumnsIfPresent() {
         try {
             int colCount = table.getColumnModel().getColumnCount();
-            int attendColIndex = colCount - 2;
-            int studColIndex = colCount - 1;
+            // We keep only the last column (AttendID) hidden.
+            int attendColIndex = colCount - 1;
 
             if (attendColIndex >= 0) {
                 var col = table.getColumnModel().getColumn(attendColIndex);
-                col.setMinWidth(0); col.setMaxWidth(0); col.setPreferredWidth(0); col.setResizable(false);
-            }
-            if (studColIndex >= 0) {
-                var col = table.getColumnModel().getColumn(studColIndex);
                 col.setMinWidth(0); col.setMaxWidth(0); col.setPreferredWidth(0); col.setResizable(false);
             }
         } catch (Exception ex) {
@@ -110,7 +112,7 @@ public class InstructorAttendanceTable {
     public void loadData(String instID, Integer courseID, Integer subID, Integer year, String section) {
         String sql =
             "SELECT a.AttendID, a.StudID, c.CourseName, sub.SubName, st.Lname, st.Fname, st.Mname, " +
-            "       st.Year, st.Section, sch.SchedID, a.DayOfWeek, a.TimeStamp, a.Status " +
+            "       st.Year, st.Section, a.TimeStamp, a.Status " +
             "FROM tblattendance a " +
             "JOIN tblstudent st ON a.StudID = st.StudID " +
             "JOIN tblschedule sch ON a.SchedID = sch.SchedID " +
@@ -121,7 +123,7 @@ public class InstructorAttendanceTable {
             "AND (? IS NULL OR sub.SubID = ?) " +
             "AND (? IS NULL OR st.Year = ?) " +
             "AND (? IS NULL OR st.Section = ?) " +
-            "ORDER BY c.CourseName, sub.SubName, st.Lname, st.Fname";
+            "ORDER BY c.CourseName, sub.SubName, st.Lname, st.Fname, a.TimeStamp DESC";
 
         try (PreparedStatement pst = conn.prepareStatement(sql)) {
 
@@ -134,21 +136,34 @@ public class InstructorAttendanceTable {
             try (ResultSet rs = pst.executeQuery()) {
                 tableModel.setRowCount(0);
 
+                SimpleDateFormat dateFmt = new SimpleDateFormat("yyyy-MM-dd");
+
                 while (rs.next()) {
+                    String attendId = rs.getString("AttendID");
+                    String studId = rs.getString("StudID");
+                    String courseName = rs.getString("CourseName");
+                    String subName = rs.getString("SubName");
+                    String lname = rs.getString("Lname");
+                    String fname = rs.getString("Fname");
+                    String mname = rs.getString("Mname");
+                    String y = rs.getString("Year");
+                    String sec = rs.getString("Section");
+                    Timestamp ts = rs.getTimestamp("TimeStamp");
+                    String dateStr = ts == null ? "" : dateFmt.format(ts);
+                    String status = rs.getString("Status");
+
                     Object[] row = {
-                        rs.getString("CourseName"),
-                        rs.getString("SubName"),
-                        rs.getString("Lname"),
-                        rs.getString("Fname"),
-                        rs.getString("Mname"),
-                        rs.getString("Year"),
-                        rs.getString("Section"),
-                        rs.getString("SchedID"),
-                        rs.getString("DayOfWeek"),
-                        rs.getTime("TimeStamp"),
-                        rs.getString("Status"),
-                        rs.getString("AttendID"), // hidden PK
-                        rs.getString("StudID")    // hidden StudID
+                        courseName,
+                        subName,
+                        studId,     // ID Number (visible)
+                        lname,
+                        mname,
+                        fname,
+                        y,
+                        sec,
+                        dateStr,    // Date (yyyy-MM-dd)
+                        status,
+                        attendId    // hidden internal PK (last column)
                     };
                     tableModel.addRow(row);
                 }

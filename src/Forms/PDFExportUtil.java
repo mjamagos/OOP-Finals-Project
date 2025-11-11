@@ -14,25 +14,32 @@ import javax.swing.JTable;
  *
  * Small orchestrator: Show SavePDFDialog + FileDialog, then delegate to PDFAttendance.export(...)
  * It also attempts to load header/footer images from classpath:
- *   /pdf_templates/header.png  (used as page header)
- *   /pdf_templates/footer.png  (used as page footer background)
+ *   /images/Header.png  (used as page header)
+ *   /images/Footer.png  (used as page footer background)
  *
  * To use your header/footer images:
- * - Put header.png and footer.png into your classpath (e.g. src/main/resources/pdf_templates/ or
- *   NetBeans project's resources folder). The exporter will load them automatically if present.
+ * - Put header.png and footer.png into your project's resources so they are available at runtime
+ *   at the paths above (NetBeans: keep under resources or classpath).
  */
 public final class PDFExportUtil {
     private PDFExportUtil() {}
 
+    // Existing no-title convenience
     public static void exportTable(Frame owner, JTable table) {
-        exportTable(owner, table, null, null);
+        exportTable(owner, table, null, null, null);
+    }
+
+    // New convenience: title but no images
+    public static void exportTable(Frame owner, JTable table, String title) {
+        exportTable(owner, table, null, null, title);
     }
 
     /**
      * Export, attempting to auto-load template header/footer images from the classpath if present.
      * You can pass explicit header/footer BufferedImage via the last two parameters (both nullable).
+     * Title may be null to skip printing a title.
      */
-    public static void exportTable(Frame owner, JTable table, BufferedImage headerImage, BufferedImage footerImage) {
+    public static void exportTable(Frame owner, JTable table, BufferedImage headerImage, BufferedImage footerImage, String title) {
         if (table == null) {
             JOptionPane.showMessageDialog(owner,
                     "Table is not available for export.",
@@ -79,7 +86,8 @@ public final class PDFExportUtil {
                     landscape,
                     margins[0], margins[1], margins[2], margins[3],
                     headerImage,
-                    footerImage
+                    footerImage,
+                    title
             );
             JOptionPane.showMessageDialog(owner,
                     "PDF saved successfully: " + outputFile.getAbsolutePath(),

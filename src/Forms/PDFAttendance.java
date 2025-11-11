@@ -1,5 +1,6 @@
 package Forms;
 
+import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -8,10 +9,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JTable;
-import javax.imageio.ImageIO;
 
 import org.apache.pdfbox.pdmodel.*;
-import org.apache.pdfbox.pdmodel.common.*;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.*;
 import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
@@ -19,14 +19,16 @@ import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 /**
  * PDFAttendance — exports a JTable to a PDF using PDFBox.
  *
- * This version draws optional header/footer images (BufferedImage) on every page,
- * reserves space for them, and still provides pagination, wrapping, truncation and adaptive font sizing.
- * It also stamps "Printed: YYYY-MM-DD HH:mm" (left) and "Page X / Y" (right) on every page footer.
+ * Supports:
+ * - Optional header/footer images
+ * - Title (multi-line): first line bold/larger; subsequent line(s) smaller and centered
+ * - Pagination, measured column widths, wrapping/truncation
+ * - Footer text: Printed: YYYY-MM-DD HH:mm (left) and Page X / Y (right)
  *
- * New signature:
- *   export(table, outputFile, pageSize, landscape, marginLeft, marginTop, marginRight, marginBottom, headerImage, footerImage)
- *
- * Pass null for headerImage/footerImage to skip images.
+ * Note: header/footer images are measured/scaled using the page's unrotated
+ * (portrait) printable width. When exporting to landscape the images are NOT
+ * stretched to the wider width; instead they are drawn at the base width and
+ * centered within the printable area.
  */
 public final class PDFAttendance {
     private PDFAttendance() {}
@@ -35,8 +37,14 @@ public final class PDFAttendance {
     private static final float BASE_FONT_SIZE = 10f;
     private static final float MIN_FONT_SIZE = 6f;
     private static final float ROW_PADDING = 2f;
-    private static final float HEADER_SPACING = 8f;
+    private static final float HEADER_SPACING = 0f; // keep header contiguous with rows
+    private static final float TITLE_SPACING = 6f;  // spacing between title block and header row
     private static final float FOOTER_TEXT_HEIGHT = 12f; // text footer height reserve
+    private static final float MIN_COLUMN_WIDTH = 30f;   // don't allow columns narrower than this (points)
+
+    // Outline thickness (stroke width) - tweak these
+    private static final float DEFAULT_STROKE_WIDTH = 0.5f; // normal row cell border
+    private static final float HEADER_STROKE_WIDTH = 0.5f;  // header row border (typically thicker)
 
     public static void export(JTable table,
                               File outputFile,
@@ -47,22 +55,23 @@ public final class PDFAttendance {
                               float marginRight,
                               float marginBottom,
                               BufferedImage headerImage,
-                              BufferedImage footerImage) throws IOException {
+                              BufferedImage footerImage,
+                              String title) throws IOException {
 
         if (table == null || outputFile == null) return;
 
         try (PDDocument doc = new PDDocument()) {
 
-            PDRectangle size = getPageSize(pageSize);
-            if (landscape) size = new PDRectangle(size.getHeight(), size.getWidth());
+            PDRectangle basePage = getPageSize(pageSize);
+            PDRectangle orientedPage = landscape ? new PDRectangle(basePage.getHeight(), basePage.getWidth()) : basePage;
 
             PDFont font = PDType1Font.HELVETICA;
 
-            // Compute an adjusted font size so columns attempt to fit horizontally
-            float availableWidth = size.getWidth() - marginLeft - marginRight;
-            float fontSize = computeAdjustedFontSize(font, table, availableWidth, BASE_FONT_SIZE, MIN_FONT_SIZE);
+            float baseAvailableWidth = basePage.getWidth() - marginLeft - marginRight;
+            float usableWidth = orientedPage.getWidth() - marginLeft - marginRight;
 
-            // Convert header/footer images to PDImageXObject if provided
+            float fontSize = computeAdjustedFontSize(font, table, usableWidth, BASE_FONT_SIZE, MIN_FONT_SIZE);
+
             PDImageXObject headerPD = null;
             PDImageXObject footerPD = null;
             float headerImageHeightPts = 0f;
@@ -70,30 +79,27 @@ public final class PDFAttendance {
 
             if (headerImage != null) {
                 headerPD = LosslessFactory.createFromImage(doc, headerImage);
-                // scale to available width (preserve aspect)
-                float w = availableWidth;
+                float w = baseAvailableWidth;
                 float h = (headerImage.getHeight() / (float) headerImage.getWidth()) * w;
                 headerImageHeightPts = h;
             }
             if (footerImage != null) {
                 footerPD = LosslessFactory.createFromImage(doc, footerImage);
-                float w = availableWidth;
+                float w = baseAvailableWidth;
                 float h = (footerImage.getHeight() / (float) footerImage.getWidth()) * w;
                 footerImageHeightPts = h;
             }
 
-            // Paged drawing that reserves header and footer image heights
-            drawTablePaged(doc, table, font, fontSize, size, marginLeft, marginTop, marginRight, marginBottom, headerPD, footerPD, headerImageHeightPts, footerImageHeightPts);
+            drawTablePaged(doc, table, font, fontSize, orientedPage, marginLeft, marginTop, marginRight, marginBottom,
+                           headerPD, footerPD, headerImageHeightPts, footerImageHeightPts, title, baseAvailableWidth);
 
-            // After table pages created, append textual footers (printed date + page X/Y).
-            // Text footer uses marginBottom + a small offset (so it sits above bottom edge or on top of footer image if present).
             addFooterTextToAllPages(doc, font, fontSize, marginLeft, marginBottom, marginRight);
 
             doc.save(outputFile);
         }
     }
 
-    // Convenience overload that keeps previous calling convention (no images)
+    // Backwards-compatible overload (no images, no title)
     public static void export(JTable table,
                               File outputFile,
                               String pageSize,
@@ -102,10 +108,9 @@ public final class PDFAttendance {
                               float marginTop,
                               float marginRight,
                               float marginBottom) throws IOException {
-        export(table, outputFile, pageSize, landscape, marginLeft, marginTop, marginRight, marginBottom, null, null);
+        export(table, outputFile, pageSize, landscape, marginLeft, marginTop, marginRight, marginBottom, null, null, null);
     }
 
-    // Determine page rectangle from name
     private static PDRectangle getPageSize(String size) {
         switch (size) {
             case "Letter": return PDRectangle.LETTER;
@@ -114,7 +119,6 @@ public final class PDFAttendance {
         }
     }
 
-    // Try to reduce font size so the widest contents per column fit available width
     private static float computeAdjustedFontSize(PDFont font, JTable table, float availableWidth, float baseSize, float minSize) {
         try {
             int cols = table.getColumnCount();
@@ -130,6 +134,7 @@ public final class PDFAttendance {
                     float cw = font.getStringWidth(cell) / 1000f * baseSize;
                     if (cw > maxWidthAtBase[c]) maxWidthAtBase[c] = cw;
                 }
+                maxWidthAtBase[c] += 2f * ROW_PADDING;
             }
 
             float total = 0f;
@@ -145,7 +150,6 @@ public final class PDFAttendance {
         }
     }
 
-    // Paged table drawer: handles pages, header repetition, row wrapping and borders
     private static void drawTablePaged(PDDocument doc,
                                       JTable table,
                                       PDFont font,
@@ -158,56 +162,102 @@ public final class PDFAttendance {
                                       PDImageXObject headerPD,
                                       PDImageXObject footerPD,
                                       float headerImageHeightPts,
-                                      float footerImageHeightPts) throws IOException {
+                                      float footerImageHeightPts,
+                                      String title,
+                                      float baseImageDrawWidth) throws IOException {
 
         final float usableWidth = pageSize.getWidth() - marginLeft - marginRight;
-        // Reserve enough vertical space for top/bottom images + footer text height
         final float usableHeight = pageSize.getHeight() - marginTop - marginBottom - footerImageHeightPts - FOOTER_TEXT_HEIGHT;
 
         int cols = table.getColumnCount();
         if (cols <= 0) return;
 
-        // Equal column widths by default
-        float colWidth = usableWidth / cols;
+        float[] colWidths = measureAndDistributeColumnWidths(font, fontSize, table, cols, usableWidth);
 
-        // Prepare header wrapped lines
         List<List<String>> headerLines = new ArrayList<>(cols);
         for (int c = 0; c < cols; c++) {
-            headerLines.add(wrapText(collapseWhitespace(safeString(table.getColumnName(c))), (int)colWidth, font, fontSize));
+            headerLines.add(wrapText(collapseWhitespace(safeString(table.getColumnName(c))), Math.max(1, (int)(colWidths[c] - 2f*ROW_PADDING)), font, fontSize));
         }
-        float headerHeight = computeBlockHeight(headerLines, fontSize);
 
-        // Start first page
+        PDFont boldFont = PDType1Font.HELVETICA_BOLD;
+
         PDPage page = new PDPage(pageSize);
         doc.addPage(page);
         PDPageContentStream cs = new PDPageContentStream(doc, page);
         float y = pageSize.getHeight() - marginTop;
 
-        // Draw header image if present (top-most), and shift y down accordingly
         if (headerPD != null && headerImageHeightPts > 0f) {
-            float drawW = usableWidth;
+            float drawW = baseImageDrawWidth;
+            float xOffset = marginLeft + Math.max(0, (usableWidth - drawW) / 2f);
             float drawH = headerImageHeightPts;
-            // draw image at left margin across usable width, anchored to the top margin
-            cs.drawImage(headerPD, marginLeft, y - drawH, drawW, drawH);
+            cs.drawImage(headerPD, xOffset, y - drawH, drawW, drawH);
             y -= drawH;
         }
 
-        // Draw header titles below header image (or immediately under margin)
-        y = drawHeaderLines(cs, headerLines, font, fontSize, marginLeft, y, colWidth);
-        y -= HEADER_SPACING;
+        float titleBlockHeight = 0f;
+        if (title != null && !title.isBlank()) {
+            String[] lines = title.split("\\r?\\n");
+            float titleFontSize = Math.max(fontSize + 2f, 12f);
+            float subtitleFontSize = Math.max(fontSize, 9f);
+
+            titleBlockHeight = titleFontSize;
+            if (lines.length > 1) {
+                titleBlockHeight += TITLE_SPACING / 2f;
+                titleBlockHeight += (lines.length - 1) * (subtitleFontSize + 2f);
+            }
+
+            float cursorY = y;
+            cs.setNonStrokingColor(Color.BLACK);
+
+            String first = lines[0];
+            float wFirst = boldFont.getStringWidth(first) / 1000f * titleFontSize;
+            float xFirst = marginLeft + (usableWidth - wFirst) / 2f;
+            float yFirst = cursorY - titleFontSize;
+            cs.beginText();
+            cs.setFont(boldFont, titleFontSize);
+            cs.newLineAtOffset(xFirst, yFirst);
+            cs.showText(first);
+            cs.endText();
+
+            cursorY -= titleFontSize;
+            if (lines.length > 1) cursorY -= TITLE_SPACING / 2f;
+
+            for (int li = 1; li < lines.length; li++) {
+                String s = lines[li];
+                float w = font.getStringWidth(s) / 1000f * subtitleFontSize;
+                float x = marginLeft + (usableWidth - w) / 2f;
+                float yLine = cursorY - subtitleFontSize;
+                cs.beginText();
+                cs.setFont(font, subtitleFontSize);
+                cs.newLineAtOffset(x, yLine);
+                cs.showText(s);
+                cs.endText();
+                cursorY -= (subtitleFontSize + 2f);
+            }
+
+            y -= titleBlockHeight;
+            y -= TITLE_SPACING;
+        }
+
+        // set stroke color and header line width before drawing header row
+        cs.setStrokingColor(Color.BLACK);
+        cs.setLineWidth(HEADER_STROKE_WIDTH);
+        float headerRowHeight = drawRow(cs, headerLines, boldFont, fontSize, marginLeft, y, colWidths);
+        y -= headerRowHeight;
+
+        // switch to default stroke width for data rows
+        cs.setLineWidth(DEFAULT_STROKE_WIDTH);
 
         for (int r = 0; r < table.getRowCount(); r++) {
-            // build wrapped cells and compute row height
             List<List<String>> rowLines = new ArrayList<>(cols);
             for (int c = 0; c < cols; c++) {
                 String text = collapseWhitespace(safeString(table.getValueAt(r, c)));
-                List<String> wrapped = wrapText(text, (int)colWidth, font, fontSize);
-                // if any resulting line still wider than col, truncate with ellipsis
+                List<String> wrapped = wrapText(text, Math.max(1, (int)(colWidths[c] - 2f*ROW_PADDING)), font, fontSize);
                 for (int i = 0; i < wrapped.size(); i++) {
                     String line = wrapped.get(i);
                     float w = font.getStringWidth(line) / 1000f * fontSize;
-                    if (w > colWidth) {
-                        int approx = Math.max(3, (int)((colWidth / (font.getStringWidth("W") / 1000f * fontSize)) - 3));
+                    if (w > colWidths[c]) {
+                        int approx = Math.max(3, (int)((colWidths[c] / (font.getStringWidth("W") / 1000f * fontSize)) - 3));
                         if (approx < line.length()) wrapped.set(i, line.substring(0, approx) + "...");
                     }
                 }
@@ -215,7 +265,6 @@ public final class PDFAttendance {
             }
             float rowHeight = computeBlockHeight(rowLines, fontSize);
 
-            // If row won't fit on current page (consider footer image and footer text), create a new page
             if (y - rowHeight < marginBottom + footerImageHeightPts + FOOTER_TEXT_HEIGHT) {
                 cs.close();
                 page = new PDPage(pageSize);
@@ -223,80 +272,166 @@ public final class PDFAttendance {
                 cs = new PDPageContentStream(doc, page);
                 y = pageSize.getHeight() - marginTop;
 
-                // header image on new page if present
                 if (headerPD != null && headerImageHeightPts > 0f) {
-                    float drawW = usableWidth;
+                    float drawW = baseImageDrawWidth;
+                    float xOffset = marginLeft + Math.max(0, (usableWidth - drawW) / 2f);
                     float drawH = headerImageHeightPts;
-                    cs.drawImage(headerPD, marginLeft, y - drawH, drawW, drawH);
+                    cs.drawImage(headerPD, xOffset, y - drawH, drawW, drawH);
                     y -= drawH;
                 }
 
-                y = drawHeaderLines(cs, headerLines, font, fontSize, marginLeft, y, colWidth);
-                y -= HEADER_SPACING;
+                if (title != null && !title.isBlank()) {
+                    String[] lines = title.split("\\r?\\n");
+                    float titleFontSize = Math.max(fontSize + 2f, 12f);
+                    float subtitleFontSize = Math.max(fontSize, 9f);
+                    float cursorY = y;
+                    cs.setNonStrokingColor(Color.BLACK);
+
+                    String first = lines[0];
+                    float wFirst = boldFont.getStringWidth(first) / 1000f * titleFontSize;
+                    float xFirst = marginLeft + (usableWidth - wFirst) / 2f;
+                    float yFirst = cursorY - titleFontSize;
+                    cs.beginText();
+                    cs.setFont(boldFont, titleFontSize);
+                    cs.newLineAtOffset(xFirst, yFirst);
+                    cs.showText(first);
+                    cs.endText();
+
+                    cursorY -= titleFontSize;
+                    if (lines.length > 1) cursorY -= TITLE_SPACING / 2f;
+
+                    for (int li = 1; li < lines.length; li++) {
+                        String s = lines[li];
+                        float w = font.getStringWidth(s) / 1000f * subtitleFontSize;
+                        float x = marginLeft + (usableWidth - w) / 2f;
+                        float yLine = cursorY - subtitleFontSize;
+                        cs.beginText();
+                        cs.setFont(font, subtitleFontSize);
+                        cs.newLineAtOffset(x, yLine);
+                        cs.showText(s);
+                        cs.endText();
+                        cursorY -= (subtitleFontSize + 2f);
+                    }
+
+                    float titleBlockHeightOnPage = titleFontSize + (lines.length > 1 ? (TITLE_SPACING / 2f + (lines.length - 1)*(subtitleFontSize + 2f)) : 0f);
+                    y -= titleBlockHeightOnPage;
+                    y -= TITLE_SPACING;
+                }
+
+                // header on new page (use header stroke width)
+                cs.setStrokingColor(Color.BLACK);
+                cs.setLineWidth(HEADER_STROKE_WIDTH);
+                headerRowHeight = drawRow(cs, headerLines, boldFont, fontSize, marginLeft, y, colWidths);
+                y -= headerRowHeight;
+                cs.setLineWidth(DEFAULT_STROKE_WIDTH);
             }
 
-            // draw row
-            drawRow(cs, rowLines, font, fontSize, marginLeft, y, colWidth);
-            y -= rowHeight;
+            float drawnRowHeight = drawRow(cs, rowLines, font, fontSize, marginLeft, y, colWidths);
+            y -= drawnRowHeight;
         }
 
-        // After rows drawn: draw footer image if present on last page, then close stream.
         if (footerPD != null && footerImageHeightPts > 0f) {
-            // footer should be anchored above marginBottom
-            float drawW = usableWidth;
+            float drawW = baseImageDrawWidth;
             float drawH = footerImageHeightPts;
-            float yPos = marginBottom + FOOTER_TEXT_HEIGHT; // ensure footer text area not overlapped (we place image slightly above bottom)
-            // But we must draw at absolute position y = (drawH height above bottom), so:
-            float yImage = yPos;
-            // For safety we draw at marginBottom (y = marginBottom)
-            cs.drawImage(footerPD, marginLeft, marginBottom, drawW, drawH);
+            float xOffset = marginLeft + Math.max(0, (usableWidth - drawW) / 2f);
+            cs.drawImage(footerPD, xOffset, marginBottom, drawW, drawH);
         }
 
         cs.close();
     }
 
-    // Draw wrapped header lines and cell borders; returns new Y
-    private static float drawHeaderLines(PDPageContentStream cs, List<List<String>> headerLines, PDFont font, float fontSize, float startX, float yTop, float colWidth) throws IOException {
-        float y = yTop;
-        float blockHeight = computeBlockHeight(headerLines, fontSize);
+    private static float[] measureAndDistributeColumnWidths(PDFont font, float fontSize, JTable table, int cols, float usableWidth) throws IOException {
+        float[] measured = new float[cols];
+        float totalMeasured = 0f;
 
-        for (int col = 0; col < headerLines.size(); col++) {
-            List<String> lines = headerLines.get(col);
-            float textY = y - ROW_PADDING;
-            for (String line : lines) {
-                cs.beginText();
-                cs.setFont(font, fontSize);
-                cs.newLineAtOffset(startX + col * colWidth + ROW_PADDING, textY - fontSize);
-                cs.showText(line);
-                cs.endText();
-                textY -= fontSize + 1f;
+        for (int c = 0; c < cols; c++) {
+            float maxW = 0f;
+            String header = safeString(table.getColumnName(c));
+            float hw = font.getStringWidth(header) / 1000f * fontSize;
+            if (hw > maxW) maxW = hw;
+
+            for (int r = 0; r < table.getRowCount(); r++) {
+                String cell = safeString(table.getValueAt(r, c));
+                float cw = font.getStringWidth(cell) / 1000f * fontSize;
+                if (cw > maxW) maxW = cw;
             }
-            cs.addRect(startX + col * colWidth, y - blockHeight, colWidth, blockHeight);
-            cs.stroke();
+
+            maxW += 2f * ROW_PADDING;
+            if (maxW < MIN_COLUMN_WIDTH) maxW = MIN_COLUMN_WIDTH;
+
+            measured[c] = maxW;
+            totalMeasured += maxW;
         }
-        return y - blockHeight;
+
+        if (totalMeasured <= usableWidth) {
+            float extra = usableWidth - totalMeasured;
+            if (extra > 1f) {
+                for (int c = 0; c < cols; c++) {
+                    float add = (measured[c] / totalMeasured) * extra;
+                    measured[c] += add;
+                }
+            }
+            return measured;
+        }
+
+        float[] scaled = new float[cols];
+        float scale = usableWidth / totalMeasured;
+        float remainingWidth = usableWidth;
+        boolean[] fixed = new boolean[cols];
+
+        for (int c = 0; c < cols; c++) {
+            float s = measured[c] * scale;
+            if (s < MIN_COLUMN_WIDTH) {
+                scaled[c] = MIN_COLUMN_WIDTH;
+                fixed[c] = true;
+                remainingWidth -= scaled[c];
+            } else {
+                scaled[c] = s;
+            }
+        }
+
+        float sumUnfixedMeasured = 0f;
+        for (int c = 0; c < cols; c++) if (!fixed[c]) sumUnfixedMeasured += measured[c];
+
+        if (sumUnfixedMeasured > 0f) {
+            for (int c = 0; c < cols; c++) {
+                if (!fixed[c]) {
+                    float share = (measured[c] / sumUnfixedMeasured) * remainingWidth;
+                    scaled[c] = share;
+                }
+            }
+        } else {
+            float per = usableWidth / cols;
+            for (int c = 0; c < cols; c++) scaled[c] = per;
+        }
+
+        return scaled;
     }
 
-    private static void drawRow(PDPageContentStream cs, List<List<String>> rowLines, PDFont font, float fontSize, float startX, float yTop, float colWidth) throws IOException {
+    private static float drawRow(PDPageContentStream cs, List<List<String>> rowLines, PDFont font, float fontSize, float startX, float yTop, float[] colWidths) throws IOException {
         float rowHeight = computeBlockHeight(rowLines, fontSize);
 
+        float x = startX;
         for (int col = 0; col < rowLines.size(); col++) {
             List<String> lines = rowLines.get(col);
+            float colW = colWidths[col];
             float textY = yTop - ROW_PADDING;
             for (String line : lines) {
                 cs.beginText();
                 cs.setFont(font, fontSize);
-                cs.newLineAtOffset(startX + col * colWidth + ROW_PADDING, textY - fontSize);
+                cs.newLineAtOffset(x + ROW_PADDING, textY - fontSize);
                 cs.showText(line);
                 cs.endText();
                 textY -= fontSize + 1f;
             }
-            cs.addRect(startX + col * colWidth, yTop - rowHeight, colWidth, rowHeight);
+            cs.addRect(x, yTop - rowHeight, colW, rowHeight);
             cs.stroke();
+            x += colW;
         }
+
+        return rowHeight;
     }
 
-    // Add textual footer (printed date/time left and page X/Y right) to all pages
     private static void addFooterTextToAllPages(PDDocument doc, PDFont font, float fontSize, float marginLeft, float marginBottom, float marginRight) throws IOException {
         int total = doc.getNumberOfPages();
         LocalDateTime now = LocalDateTime.now();
@@ -308,17 +443,15 @@ public final class PDFAttendance {
         for (int i = 0; i < total; i++) {
             PDPage page = doc.getPage(i);
             PDRectangle media = page.getMediaBox();
-            float y = marginBottom; // put footer text at marginBottom (above true edge)
-            // Append footer content
+            float y = marginBottom;
             try (PDPageContentStream cs = new PDPageContentStream(doc, page, PDPageContentStream.AppendMode.APPEND, true, true)) {
-                // left: printed date/time
+                cs.setNonStrokingColor(Color.BLACK);
                 cs.beginText();
                 cs.setFont(font, footerFontSize);
                 cs.newLineAtOffset(marginLeft, y);
                 cs.showText("Printed: " + dateStr);
                 cs.endText();
 
-                // right: page X / Y
                 String p = "Page " + (i + 1) + " / " + total;
                 float pw = font.getStringWidth(p) / 1000f * footerFontSize;
                 float x = media.getWidth() - marginRight - pw;
@@ -331,14 +464,12 @@ public final class PDFAttendance {
         }
     }
 
-    // Compute max block height (number of lines in tallest column) * (fontSize + lineSpacing) + paddings
     private static float computeBlockHeight(List<List<String>> columnLines, float fontSize) {
         int maxLines = 0;
         for (List<String> lines : columnLines) if (lines != null && lines.size() > maxLines) maxLines = lines.size();
         return maxLines * (fontSize + 1f) + 2f * ROW_PADDING;
     }
 
-    // Wrap text into lines so each line's width <= maxWidthPoints (approx)
     private static List<String> wrapText(String text, int maxWidthPoints, PDFont font, float fontSize) throws IOException {
         List<String> out = new ArrayList<>();
         if (text == null) { out.add(""); return out; }
@@ -357,7 +488,6 @@ public final class PDFAttendance {
                 if (line.length() > 0) {
                     out.add(line.toString());
                 }
-                // if word itself exceeds width, break it into smaller chunks
                 float wordWidth = font.getStringWidth(w) / 1000f * fontSize;
                 if (wordWidth <= maxWidthPoints) {
                     line = new StringBuilder(w);
@@ -388,7 +518,6 @@ public final class PDFAttendance {
         return out;
     }
 
-    // Collapse multiple whitespace to single spaces
     private static String collapseWhitespace(String s) {
         if (s == null) return "";
         return s.trim().replaceAll("\\s+", " ");
@@ -400,7 +529,6 @@ public final class PDFAttendance {
         return s == null ? "" : s;
     }
 
-    // Margin conversion kept here for convenience (points)
     public static float[] convertMargins(String name) {
         switch (name) {
             case "Narrow": return new float[]{20f, 20f, 20f, 20f};
